@@ -1,5 +1,4 @@
 using Core.DTO;
-using System.Net.Http.Json;
 using Core.Entities;
 
 namespace Infrastructure.Clients;

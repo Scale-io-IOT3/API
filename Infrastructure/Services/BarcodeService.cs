@@ -1,22 +1,29 @@
 using Core.DTO;
-using Core.Interface;
 using Infrastructure.Clients;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Infrastructure.Services;
 
-public class BarcodeService(BarcodeClient client) : IBarcodeService
+public class BarcodeService(BarcodeClient client, IMemoryCache cache) : CachedService<BarcodeResponse>(cache)
 {
-    public async Task<BarcodeResponse?> FetchProduct(string code, double grams)
+    protected override string GenerateKey(string input, double? grams)
     {
-        var response = await client.FetchProduct(code);
-        return response?.Product is null ? null : ScaleProduct(response, grams);
+        var w = grams is null or <= 0 ? 100 : grams.Value;
+        return $"code_{input.Trim().ToLowerInvariant()}_{w}";
     }
 
-    private static BarcodeResponse ScaleProduct(BarcodeResponse response, double weight)
+    protected override async Task<BarcodeResponse?> Fetch(string input, double? grams)
     {
-        if (weight <= 0) weight = 100.0;
-        response.Product.ScaleNutriments(weight);
+        var response = await client.FetchProduct(input);
+        return ScaleProduct(response, grams);
+    }
 
+    private static BarcodeResponse? ScaleProduct(BarcodeResponse? response, double? weight)
+    {
+        if (response?.Product is null) return null;
+
+        var grams = weight is null or <= 0 ? 100.0 : weight.Value;
+        response.Product.ScaleNutriments(grams);
         return response;
     }
 }

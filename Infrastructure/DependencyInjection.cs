@@ -1,4 +1,5 @@
-﻿using Core.Entities;
+﻿using Core.DTO;
+using Core.DTO.FreshFoods;
 using Core.Interface;
 using Infrastructure.Clients;
 using Infrastructure.Services;
@@ -10,6 +11,7 @@ public static class DependencyInjection
 {
     public static void AddInfrastructure(this IServiceCollection services)
     {
+        services.AddMemoryCache();
         services.AddScoped();
         services.AddClients();
     }
@@ -22,7 +24,7 @@ public static class DependencyInjection
 
     private static void AddScoped(this IServiceCollection services)
     {
-        services.AddScoped<IBarcodeService, BarcodeService>();
-        services.AddScoped<IFoodService, FreshFoodsService>();
+        services.AddScoped<IService<BarcodeResponse>, BarcodeService>();
+        services.AddScoped<IService<FoodResponse>, FreshFoodsService>();
     }
 }

@@ -1,14 +1,16 @@
 using Core.DTO.FreshFoods;
-using Core.Interface;
 using Infrastructure.Clients;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Infrastructure.Services;
 
-public class FreshFoodsService(FoodsClient client) : IFoodService
+public class FreshFoodsService(FoodsClient client, IMemoryCache cache) : CachedService<FoodResponse>(cache)
 {
-    public async Task<FoodResponse?> FetchFood(string food)
+    protected override string GenerateKey(string input, double? grams) => $"food_{input.Trim().ToLowerInvariant()}";
+
+    protected override async Task<FoodResponse?> Fetch(string input, double? grams)
     {
-        var response = await client.FetchFood(food);
+        var response = await client.FetchFood(input);
         return response?.Filter();
     }
 }
