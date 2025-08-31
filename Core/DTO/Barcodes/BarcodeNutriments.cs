@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Core.DTO;
+namespace Core.DTO.Barcodes;
 
 public class BarcodeNutriments
 {

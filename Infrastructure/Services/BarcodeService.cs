@@ -8,8 +8,8 @@ public class BarcodeService(BarcodeClient client, IMemoryCache cache) : CachedSe
 {
     protected override string GenerateKey(string input, double? grams)
     {
-        var w = grams is null or <= 0 ? 100 : grams.Value;
-        return $"code_{input.Trim().ToLowerInvariant()}_{w}";
+        var weight = IsValid(grams) ? grams!.Value : 100;
+        return $"code_{input.Trim().ToLowerInvariant()}_{weight}";
     }
 
     protected override async Task<BarcodeResponse?> Fetch(string input, double? grams)
@@ -25,5 +25,10 @@ public class BarcodeService(BarcodeClient client, IMemoryCache cache) : CachedSe
         var grams = weight is null or <= 0 ? 100.0 : weight.Value;
         response.Product.ScaleNutriments(grams);
         return response;
+    }
+
+    private static bool IsValid(double? g)
+    {
+        return g is null or > 0;
     }
 }

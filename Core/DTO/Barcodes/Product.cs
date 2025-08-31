@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Core.DTO.Barcodes;
 
 namespace Core.DTO;
 

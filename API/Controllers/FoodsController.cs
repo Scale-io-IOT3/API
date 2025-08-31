@@ -9,9 +9,9 @@ namespace Scale.io_API.Controllers;
 public class FoodsController(IService<FoodResponse> service) : ControllerBase
 {
     [HttpGet("{food}")]
-    public async Task<ActionResult> Read(string food)
+    public async Task<ActionResult> Read(string food, [FromQuery] double grams)
     {
-        var res = await service.FetchAsync(food);
+        var res = await service.FetchAsync(food, grams);
         return res is not null ? Ok(res) : NotFound();
     }
 }

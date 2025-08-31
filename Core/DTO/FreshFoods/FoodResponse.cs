@@ -7,13 +7,25 @@ public partial class FoodResponse
 {
     [JsonPropertyName("foods")] public Food[] Foods { get; init; }
 
-    public FoodResponse Filter()
+    private FoodResponse Filter()
     {
         var filtered = Foods.Where(f => Raw().IsMatch(f.Description)).ToArray();
 
         return new FoodResponse
         {
-            Foods = filtered,
+            Foods = filtered
+        };
+    }
+
+    public FoodResponse Treat(double grams)
+    {
+        var res = Filter();
+        return new FoodResponse
+        {
+            Foods = res.Foods
+                .Select(f => f.Treat(grams))
+                .ToArray()
+            
         };
     }
 

@@ -8,11 +8,11 @@ using Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 ServicesConfig(builder);
 
-var app = builder.Build();
+var application = builder.Build();
 EnvironmentConfig(builder);
-AppConfig(app);
+AppConfig(application);
 
-app.Run();
+application.Run();
 return;
 
 void ServicesConfig(WebApplicationBuilder webAppBuilder)
@@ -41,18 +41,20 @@ void ServicesConfig(WebApplicationBuilder webAppBuilder)
 
     webAppBuilder.Services.AddOpenApi();
 }
-void AppConfig(WebApplication webApp)
+
+void AppConfig(WebApplication app)
 {
-    if (webApp.Environment.IsDevelopment())
+    if (app.Environment.IsDevelopment())
     {
-        webApp.MapOpenApi();
-        webApp.MapScalarApiReference();
+        app.MapOpenApi();
+        app.MapScalarApiReference();
     }
 
-    webApp.UseHttpsRedirection();
-    webApp.UseAuthorization();
-    webApp.MapControllers();
+    app.UseHttpsRedirection();
+    app.UseAuthorization();
+    app.MapControllers();
 }
+
 void EnvironmentConfig(WebApplicationBuilder webApplicationBuilder)
 {
     Env.Load();
