@@ -1,17 +1,14 @@
-using Core.DTO;
 using Core.Interface;
+using Infrastructure;
 using Microsoft.AspNetCore.Mvc;
+using Scale.io_API.Controllers.Abstract;
 
 namespace Scale.io_API.Controllers;
 
 [ApiController]
 [Route("v{v:apiVersion}/[controller]")]
-public class BarcodesController(IService<BarcodeResponse> service) : ControllerBase
+public class BarcodesController(ServiceFactory factory) : Controller<IBarcodeService>(factory)
 {
     [HttpGet("{code}")]
-    public async Task<ActionResult> Read(string code, [FromQuery] double grams)
-    {
-        var res = await service.FetchAsync(code, grams);
-        return res is not null ? Ok(res) : NotFound();
-    }
+    public Task<ActionResult> Read(string code, [FromQuery] double grams) => base.Read(code, grams);
 }

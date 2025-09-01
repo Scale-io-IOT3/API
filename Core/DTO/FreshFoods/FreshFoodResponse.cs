@@ -3,31 +3,28 @@ using System.Text.RegularExpressions;
 
 namespace Core.DTO.FreshFoods;
 
-public partial class FoodResponse
+public partial class FreshFoodResponse
 {
-    [JsonPropertyName("foods")] public Food[] Foods { get; init; }
+    [JsonPropertyName("foods")] public FreshFood[] Foods { get; init; }
 
-    private FoodResponse Filter()
+    private FreshFoodResponse Filter()
     {
         var filtered = Foods.Where(f => Raw().IsMatch(f.Description)).ToArray();
 
-        return new FoodResponse
+        return new FreshFoodResponse
         {
             Foods = filtered
         };
     }
 
-    public FoodResponse Treat(double grams)
+    public FreshFoodResponse Process(double grams)
     {
         var res = Filter();
-        return new FoodResponse
-        {
-            Foods = res.Foods
-                .Select(f => f.Treat(grams))
-                .ToArray()
-            
-        };
+        var foods = res.Foods.Select(f => f.Process(grams)).ToArray();
+
+        return new FreshFoodResponse { Foods = foods };
     }
+
 
     [GeneratedRegex(@"\braw\b", RegexOptions.IgnoreCase, "en-US")]
     private static partial Regex Raw();

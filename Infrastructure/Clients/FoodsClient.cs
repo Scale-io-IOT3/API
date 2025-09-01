@@ -13,13 +13,12 @@ public class FoodsClient : CustomClient
     {
         var key = configuration["API_KEY"];
         _baseUrl = $"{_baseUrl}?api_key={key}";
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException("Missing API key configuration.");
+        if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("Missing API key configuration.");
     }
 
-    public Task<FoodResponse?> FetchFood(string food)
+    public Task<FreshFoodResponse?> FetchFood(string food)
     {
         var url = $"{_baseUrl}&query={Uri.EscapeDataString(food)}&dataType=SR%20Legacy";
-        return GetFromApiAsync<FoodResponse>(url);
+        return GetFromApiAsync<FreshFoodResponse>(url);
     }
 }

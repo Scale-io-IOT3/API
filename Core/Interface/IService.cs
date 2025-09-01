@@ -1,6 +1,12 @@
+using Core.DTO.Foods;
+
 namespace Core.Interface;
 
-public interface IService<TResponse>
+public interface IService
 {
-    public Task<TResponse?> FetchAsync(string input, double? grams = null);
+    Task<FoodResponse?> FetchAsync(string input, double? grams = null);
 }
+
+public interface IBarcodeService : IService;
+
+public interface IFreshFoodsService : IService;

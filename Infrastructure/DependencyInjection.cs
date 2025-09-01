@@ -1,6 +1,4 @@
-﻿using Core.DTO;
-using Core.DTO.FreshFoods;
-using Core.Interface;
+﻿using Core.Interface;
 using Infrastructure.Clients;
 using Infrastructure.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +22,8 @@ public static class DependencyInjection
 
     private static void AddScoped(this IServiceCollection services)
     {
-        services.AddScoped<IService<BarcodeResponse>, BarcodeService>();
-        services.AddScoped<IService<FoodResponse>, FreshFoodsService>();
+        services.AddScoped<ServiceFactory>();
+        services.AddScoped<IBarcodeService, BarcodeService>();
+        services.AddScoped<IFreshFoodsService, FreshFoodsService>();
     }
 }
