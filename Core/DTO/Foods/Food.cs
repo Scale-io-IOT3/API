@@ -2,43 +2,45 @@ using System.Text.Json.Serialization;
 using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
 
-namespace Core.DTO;
+namespace Core.DTO.Foods;
 
 public class Food
 {
     [JsonPropertyName("product_name")] public string Name { get; set; }
-    [JsonPropertyName("brands")] public string? Brands { get; set; }
+    [JsonPropertyName("brands")] public string? Brands { get; private set; }
     [JsonPropertyName("image_url")] public Uri? ImageUrl { get; set; }
-    [JsonPropertyName("nutriments")] public Nutriments Nutriments { get; set; }
+    [JsonPropertyName("nutriments")] public Macros Macros { get; set; }
     [JsonPropertyName("nutriments_%")] public MacroPercentage MacroPercentages { get; set; }
 
 
     public static Food FromFreshFood(FreshFood food)
     {
+        var source = new NutrientsMapper(food.FoodNutrients);
         return new Food
         {
-            Nutriments = Nutriments.FromNutrients(food.FoodNutrients),
-            Brands = null,
+            Macros = Macros.From(source),
             ImageUrl = null,
-            MacroPercentages = MacroPercentage.FromNutrients(food.FoodNutrients),
-            Name = food.Description
+            MacroPercentages = MacroPercentage.From(source),
+            Name = food.Description,
+            Brands = food.Category
         };
     }
 
     public static Food FromProduct(Product food)
     {
+        var macros = food.Macros;
         return new Food
         {
             Brands = food.Brands,
             ImageUrl = food.ImageUrl,
-            MacroPercentages = MacroPercentage.FromNutriment(food.Nutriments),
+            MacroPercentages = MacroPercentage.From(macros),
             Name = food.Name,
-            Nutriments = food.Nutriments
+            Macros = food.Macros
         };
     }
-    
-    public void ScaleNutriments(double weight)
+
+    public void Scale(double weight)
     {
-        Nutriments = Nutriments.ForAmount(weight);
+        Macros = Macros.For(weight);
     }
 }

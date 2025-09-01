@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
-using Core.DTO.FreshFoods;
+using Core.Interface;
 
-namespace Core.DTO;
+namespace Core.DTO.Foods;
 
 public class MacroPercentage
 {
@@ -13,41 +13,20 @@ public class MacroPercentage
     [JsonPropertyName("fat_%")] public double FatPct { get; init; }
     [JsonPropertyName("proteins_%")] public double ProteinsPct { get; init; }
 
-    public static MacroPercentage FromNutrients(Nutrient[] nutrients)
-    {
-        var protein = nutrients
-            .FirstOrDefault(n => n.NutrientName.Equals("Protein", StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
-        var fat = nutrients
-            .FirstOrDefault(n => n.NutrientName.Equals("Total lipid (fat)", StringComparison.OrdinalIgnoreCase))
-            ?.Value ?? 0;
-        var carbs = nutrients.FirstOrDefault(n =>
-            n.NutrientName.Equals("Carbohydrate, by difference", StringComparison.OrdinalIgnoreCase))?.Value ?? 0;
-        var calories =
-            nutrients.FirstOrDefault(n => n.NutrientName.Equals("Energy", StringComparison.OrdinalIgnoreCase))
-                ?.Value ??
-            protein * CalsPerGramProtein + fat * CalsPerGramFat + carbs * CalsPerGramCarb;
+    private static double R(double cal) => Math.Round(cal * 100, 1);
 
-        if (calories == 0) calories = 1;
+    public static MacroPercentage From(IMacroSource source)
+    {
+        var proteinKcal = source.Proteins * CalsPerGramProtein;
+        var fatKcal = source.Fat * CalsPerGramFat;
+        var carbKcal = source.Carbohydrates * CalsPerGramCarb;
+        var total = proteinKcal + fatKcal + carbKcal;
 
         return new MacroPercentage
         {
-            ProteinsPct = Math.Round(protein * CalsPerGramProtein / calories * 100, 2),
-            FatPct = Math.Round(fat * CalsPerGramFat / calories * 100, 2),
-            CarbsPct = Math.Round(carbs * CalsPerGramCarb / calories * 100, 2)
-        };
-    }
-
-    public static MacroPercentage FromNutriment(Nutriments nutriments)
-    {
-        var proteinKcal = nutriments.Proteins * CalsPerGramProtein;
-        var fatKcal = nutriments.Fat * CalsPerGramFat;
-        var carbKcal = nutriments.Carbohydrates * CalsPerGramCarb;
-
-        return new MacroPercentage
-        {
-            ProteinsPct = Math.Round(proteinKcal / nutriments.Calories * 100, 2),
-            FatPct = Math.Round(fatKcal / nutriments.Calories * 100, 2),
-            CarbsPct = Math.Round(carbKcal / nutriments.Calories * 100, 2)
+            ProteinsPct = R(proteinKcal / total),
+            FatPct = R(fatKcal / total),
+            CarbsPct = R(carbKcal / total)
         };
     }
 }

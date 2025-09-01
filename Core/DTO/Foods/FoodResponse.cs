@@ -17,12 +17,15 @@ public class FoodResponse
 
     public static FoodResponse FromFreshFoodResponse(FreshFoodResponse? response, double grams)
     {
-        if (response?.Foods == null || response.Foods.Length == 0)
-            return new FoodResponse { Foods = [] };
+        if (response?.Foods == null || response.Foods.Length == 0) return new FoodResponse { Foods = [] };
 
-        var foods = response.Process(grams).Foods.Select(Food.FromFreshFood).ToArray();
+        var foods = response.Filter()
+            .Foods
+            .Select(Food.FromFreshFood)
+            .ToArray();
 
-        return new FoodResponse { Foods =  foods};
+        foreach (var f in foods) f.Scale(grams);
+
+        return new FoodResponse { Foods = foods };
     }
-    
 }

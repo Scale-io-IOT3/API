@@ -7,7 +7,22 @@ public partial class FreshFoodResponse
 {
     [JsonPropertyName("foods")] public FreshFood[] Foods { get; init; }
 
-    private FreshFoodResponse Filter()
+    public FreshFoodResponse Filter()
+    {
+        var filtered = Foods
+            .Select(f => new FreshFood
+            {
+                Description = f.Description,
+                Category = f.Category,
+                FoodNutrients = f.GetMacros()
+            })
+            .ToArray();
+
+        return new FreshFoodResponse { Foods = filtered }.GetRaw();
+    }
+
+
+    private FreshFoodResponse GetRaw()
     {
         var filtered = Foods.Where(f => Raw().IsMatch(f.Description)).ToArray();
 
@@ -15,14 +30,6 @@ public partial class FreshFoodResponse
         {
             Foods = filtered
         };
-    }
-
-    public FreshFoodResponse Process(double grams)
-    {
-        var res = Filter();
-        var foods = res.Foods.Select(f => f.Process(grams)).ToArray();
-
-        return new FreshFoodResponse { Foods = foods };
     }
 
 

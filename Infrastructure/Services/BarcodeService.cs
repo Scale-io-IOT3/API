@@ -23,7 +23,7 @@ public class BarcodeService(BarcodeClient client, IMemoryCache cache) : CachedSe
         if (response?.Foods is null) return null;
 
         var grams = weight is null or <= 0 ? 100.0 : weight.Value;
-        response.Foods.First().ScaleNutriments(grams);
+        response.Foods.First().Scale(grams);
         return response;
     }
 }

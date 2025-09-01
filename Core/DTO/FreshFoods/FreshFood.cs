@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Core.DTO.Barcodes;
 
 namespace Core.DTO.FreshFoods;
 
@@ -14,41 +13,20 @@ public class FreshFood
     };
 
     [JsonPropertyName("description")] public string Description { get; init; }
-
+    [JsonPropertyName("foodCategory")] public string Category { get; init; }
     [JsonPropertyName("foodNutrients")] public Nutrient[] FoodNutrients { get; set; }
 
-    public FreshFood Process(double grams)
+    public Nutrient[] GetMacros()
     {
-        return Filter().ForAmount(grams);
+        return FoodNutrients.Where(IsMacro).ToArray();
     }
 
-    private FreshFood Filter()
+    private static bool IsMacro(Nutrient n)
     {
-        return new FreshFood
-        {
-            Description = Description,
-            FoodNutrients = (FoodNutrients ?? [])
-                .Where(n =>
-                    Macros.Any(m => n.NutrientName.Contains(m, StringComparison.OrdinalIgnoreCase)) &&
-                    (!n.NutrientName.Equals("Energy", StringComparison.OrdinalIgnoreCase)
-                     || n.UnitName.Equals("KCAL", StringComparison.OrdinalIgnoreCase))
-                )
-                .ToArray()
-        };
-    }
+        if (Macros.Any(m => n.NutrientName.Contains(m, StringComparison.OrdinalIgnoreCase)))
+            return true;
 
-    private FreshFood ForAmount(double grams)
-    {
-        if (grams is <= 0 or 100) return this;
-
-        var scaledNutrients = FoodNutrients
-            .Select(n => n.ForAmount(grams))
-            .ToArray();
-
-        return new FreshFood
-        {
-            Description = Description,
-            FoodNutrients = scaledNutrients
-        };
+        return n.NutrientName.Equals("Energy", StringComparison.OrdinalIgnoreCase)
+               && n.UnitName.Equals("KCAL", StringComparison.OrdinalIgnoreCase);
     }
 }
