@@ -33,7 +33,8 @@ public class FoodResponse
         {
             BarcodeResponse barcode => FromBarcodeResponse(barcode, grams),
             FreshFoodResponse fresh => FromFreshFoodResponse(fresh, grams),
-            _ => throw new ArgumentException($"Unsupported response type: {typeof(ISourceResponse)}")
+            null => new FoodResponse { Foods = [] },
+            _ => throw new ArgumentException($"Unsupported response type: {nameof(ISourceResponse)}")
         };
     }
 

@@ -17,13 +17,11 @@ public abstract class CachedService(IMemoryCache cache) : IService
         var key = GenerateKey(input, grams);
         if (cache.TryGetValue(key, out FoodResponse? cached)) return cached;
 
-        var response = await Fetch(input, grams);
+        var response = await FetchFromSource(input, grams);
         cache.Set(key, response, _options);
 
         return response;
     }
-
-    protected abstract Task<FoodResponse?> Fetch(string input, double? grams);
 
     protected virtual string GenerateKey(string input, double? grams)
     {
@@ -32,4 +30,5 @@ public abstract class CachedService(IMemoryCache cache) : IService
     }
 
     protected static double GetWeight(double? weight) => weight is null or <= 0 ? 100.0 : weight.Value;
+    protected abstract Task<FoodResponse?> FetchFromSource(string input, double? grams);
 }

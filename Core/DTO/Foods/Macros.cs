@@ -9,10 +9,10 @@ public class Macros : IMacroSource
     public double E { private get; init; }
 
     [JsonPropertyName("calories")] public int Calories => (int)Math.Round(E);
-
     [JsonPropertyName("carbohydrates")] public double Carbohydrates { get; init; }
     [JsonPropertyName("fat")] public double Fat { get; init; }
     [JsonPropertyName("proteins")] public double Proteins { get; init; }
+    [JsonPropertyName("percentages")] public Percentage Percentages => Percentage.From(this);
 
     private static double R(double value) => Math.Round(value, 1);
 

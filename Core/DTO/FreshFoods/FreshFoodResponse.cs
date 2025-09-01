@@ -19,21 +19,6 @@ public partial class FreshFoodResponse : ISourceResponse
             })
             .ToArray();
 
-        return new FreshFoodResponse { Foods = filtered }.GetRaw();
+        return new FreshFoodResponse { Foods = filtered };
     }
-
-
-    private FreshFoodResponse GetRaw()
-    {
-        var filtered = Foods.Where(f => Raw().IsMatch(f.Description)).ToArray();
-
-        return new FreshFoodResponse
-        {
-            Foods = filtered
-        };
-    }
-
-
-    [GeneratedRegex(@"\braw\b", RegexOptions.IgnoreCase, "en-US")]
-    private static partial Regex Raw();
 }

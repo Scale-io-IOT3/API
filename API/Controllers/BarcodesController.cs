@@ -9,6 +9,8 @@ namespace Scale.io_API.Controllers;
 [Route("v{v:apiVersion}/[controller]")]
 public class BarcodesController(IBarcodeService service) : Controller<IBarcodeService>(service)
 {
+    protected override bool EmptyAsNotFound => true;
+
     [HttpGet("{code}")]
     public Task<ActionResult> Read(string code, [FromQuery] double grams) => base.Read(code, grams);
 }

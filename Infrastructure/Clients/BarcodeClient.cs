@@ -7,7 +7,6 @@ public class BarcodeClient(HttpClient client) : CustomClient<BarcodeResponse>(cl
 {
     private static string Url => "https://world.openfoodfacts.net/api/v2/product/";
 
-
     public override Task<BarcodeResponse?> Fetch(string barcode)
     {
         var url = $"{Url}{Uri.EscapeDataString(barcode)}.json";

@@ -7,14 +7,13 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Infrastructure.Services;
 
-public class FoodService<TResponse>(IApiClient<TResponse> client, IMemoryCache cache) : CachedService(cache)
-    where TResponse : ISourceResponse
+public class FoodService<TResponse>(IApiClient<TResponse> client, IMemoryCache cache)
+    : CachedService(cache) where TResponse : ISourceResponse
 {
     protected override string GenerateKey(string input, double? grams) =>
-        $"{typeof(TResponse).Name}_{base.GenerateKey(input, grams)}";
+        $"{nameof(TResponse)}_{base.GenerateKey(input, grams)}";
 
-
-    protected override async Task<FoodResponse?> Fetch(string input, double? grams)
+    protected override async Task<FoodResponse?> FetchFromSource(string input, double? grams)
     {
         var response = await client.Fetch(input);
         return Scale(response, grams);
