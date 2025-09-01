@@ -7,8 +7,8 @@ namespace Scale.io_API.Controllers;
 
 [ApiController]
 [Route("v{v:apiVersion}/[controller]")]
-public class FoodsController(ServiceFactory factory) : Controller<IFreshFoodsService>(factory)
+public class FoodsController(IFreshFoodsService service) : Controller<IFreshFoodsService>(service)
 {
     [HttpGet("{food}")]
-    public async Task<ActionResult> Read(string food, [FromQuery] double grams) => await base.Read(food, grams);
+    public Task<ActionResult> Read(string food, [FromQuery] double grams) => base.Read(food, grams);
 }

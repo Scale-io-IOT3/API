@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
+using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
+using Core.Interface;
 
 namespace Core.DTO.Foods;
 
@@ -7,25 +9,40 @@ public class FoodResponse
 {
     [JsonPropertyName("foods")] public Food[] Foods { get; set; }
 
-    public static FoodResponse FromBarcodeResponse(BarcodeResponse? response)
-    {
-        if (response?.Product == null) return new FoodResponse { Foods = [] };
 
-        var food = Food.FromProduct(response.Product);
-        return new FoodResponse { Foods = [food] };
+    private static FoodResponse FromBarcodeResponse(BarcodeResponse? response, double grams)
+    {
+        return response?.Product == null ? Empty() : FromFoods([Food.FromProduct(response.Product)], grams);
     }
 
-    public static FoodResponse FromFreshFoodResponse(FreshFoodResponse? response, double grams)
+    private static FoodResponse FromFreshFoodResponse(FreshFoodResponse? response, double grams)
     {
-        if (response?.Foods == null || response.Foods.Length == 0) return new FoodResponse { Foods = [] };
+        if (response?.Foods == null || response.Foods.Length == 0) return Empty();
 
         var foods = response.Filter()
             .Foods
             .Select(Food.FromFreshFood)
             .ToArray();
 
-        foreach (var f in foods) f.Scale(grams);
+        return FromFoods(foods, grams);
+    }
 
+    public static FoodResponse From<T>(T? response, double grams)
+    {
+        return response switch
+        {
+            BarcodeResponse barcode => FromBarcodeResponse(barcode, grams),
+            FreshFoodResponse fresh => FromFreshFoodResponse(fresh, grams),
+            _ => throw new ArgumentException($"Unsupported response type: {typeof(ISourceResponse)}")
+        };
+    }
+
+
+    private static FoodResponse FromFoods(Food[] foods, double grams)
+    {
+        foreach (var f in foods) f.Scale(grams);
         return new FoodResponse { Foods = foods };
     }
+
+    private static FoodResponse Empty() => new() { Foods = [] };
 }

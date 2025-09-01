@@ -1,4 +1,6 @@
-﻿using Core.Interface;
+﻿using Core.DTO.Barcodes;
+using Core.DTO.FreshFoods;
+using Core.Interface;
 using Infrastructure.Clients;
 using Infrastructure.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,14 +18,13 @@ public static class DependencyInjection
 
     private static void AddClients(this IServiceCollection services)
     {
-        services.AddHttpClient<BarcodeClient>();
-        services.AddHttpClient<FoodsClient>();
+        services.AddHttpClient<IApiClient<BarcodeResponse>, BarcodeClient>();
+        services.AddHttpClient<IApiClient<FreshFoodResponse>, FoodsClient>();
     }
 
     private static void AddScoped(this IServiceCollection services)
     {
-        services.AddScoped<ServiceFactory>();
-        services.AddScoped<IBarcodeService, BarcodeService>();
-        services.AddScoped<IFreshFoodsService, FreshFoodsService>();
+        services.AddScoped<IBarcodeService, BarcodeFoodService>();
+        services.AddScoped<IFreshFoodsService, FreshFoodService>();
     }
 }

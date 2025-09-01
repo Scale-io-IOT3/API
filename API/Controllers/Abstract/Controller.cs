@@ -4,13 +4,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Scale.io_API.Controllers.Abstract;
 
-public abstract class Controller<T>(ServiceFactory factory) : ControllerBase where T : IService
+public abstract class Controller<TService>(TService service) : ControllerBase where TService : IService
 {
-    private readonly T _service = factory.GetService<T>();
-
-    protected async Task<ActionResult> Read(string input, double? @params)
+    protected async Task<ActionResult> Read(string input, double? grams)
     {
-        var res = await _service.FetchAsync(input, @params);
+        var res = await service.FetchAsync(input, grams);
         return res is not null ? Ok(res) : NotFound();
     }
 }

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Core.DTO.Foods;
 using Core.Interface;
 using Microsoft.Extensions.Caching.Memory;
@@ -24,16 +23,13 @@ public abstract class CachedService(IMemoryCache cache) : IService
         return response;
     }
 
+    protected abstract Task<FoodResponse?> Fetch(string input, double? grams);
+
     protected virtual string GenerateKey(string input, double? grams)
     {
-        var weight = IsValid(grams) ? grams!.Value.ToString(CultureInfo.InvariantCulture) : "100";
+        var weight = grams is null or <= 0 ? 100.0 : grams.Value;
         return $"{input.Trim().ToLowerInvariant()}_{weight}";
     }
 
-    protected abstract Task<FoodResponse?> Fetch(string input, double? grams);
-
-    private static bool IsValid(double? g)
-    {
-        return g is null or > 0;
-    }
+    protected static double GetWeight(double? weight) => weight is null or <= 0 ? 100.0 : weight.Value;
 }

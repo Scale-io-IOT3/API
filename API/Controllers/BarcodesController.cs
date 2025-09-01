@@ -7,7 +7,7 @@ namespace Scale.io_API.Controllers;
 
 [ApiController]
 [Route("v{v:apiVersion}/[controller]")]
-public class BarcodesController(ServiceFactory factory) : Controller<IBarcodeService>(factory)
+public class BarcodesController(IBarcodeService service) : Controller<IBarcodeService>(service)
 {
     [HttpGet("{code}")]
     public Task<ActionResult> Read(string code, [FromQuery] double grams) => base.Read(code, grams);

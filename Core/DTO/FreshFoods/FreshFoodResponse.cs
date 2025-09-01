@@ -1,9 +1,10 @@
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Core.Interface;
 
 namespace Core.DTO.FreshFoods;
 
-public partial class FreshFoodResponse
+public partial class FreshFoodResponse : ISourceResponse
 {
     [JsonPropertyName("foods")] public FreshFood[] Foods { get; init; }
 

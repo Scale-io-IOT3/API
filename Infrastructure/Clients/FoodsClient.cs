@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Clients;
 
-public class FoodsClient : CustomClient
+public class FoodsClient : CustomClient<FreshFoodResponse>
 {
     private readonly string _baseUrl = "https://api.nal.usda.gov/fdc/v1/foods/search";
 
@@ -15,10 +15,10 @@ public class FoodsClient : CustomClient
         _baseUrl = $"{_baseUrl}?api_key={key}";
         if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("Missing API key configuration.");
     }
-
-    public Task<FreshFoodResponse?> FetchFood(string food)
+    
+    public override Task<FreshFoodResponse?> Fetch(string food)
     {
         var url = $"{_baseUrl}&query={Uri.EscapeDataString(food)}&dataType=SR%20Legacy";
-        return GetFromApiAsync<FreshFoodResponse>(url);
+        return GetFromApiAsync(url);
     }
 }

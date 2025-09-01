@@ -1,9 +1,9 @@
 using System.Text.Json.Serialization;
-using Core.DTO.Barcodes;
+using Core.Interface;
 
-namespace Core.DTO;
+namespace Core.DTO.Barcodes;
 
-public class BarcodeResponse
+public class BarcodeResponse : ISourceResponse
 {
     [JsonPropertyName("product")] public Product Product { get; init; }
 }
