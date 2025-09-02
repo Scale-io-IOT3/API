@@ -1,15 +1,10 @@
 using Core.DTO.Barcodes;
-using Core.Entities;
+using Infrastructure.Clients.Abstract;
 
 namespace Infrastructure.Clients;
 
-public class BarcodeClient(HttpClient client) : CustomClient<BarcodeResponse>(client)
+public class BarcodeClient(HttpClient client) : Client<BarcodeResponse>(client)
 {
     private static string Url => "https://world.openfoodfacts.net/api/v2/product/";
-
-    public override Task<BarcodeResponse?> Fetch(string barcode)
-    {
-        var url = $"{Url}{Uri.EscapeDataString(barcode)}.json";
-        return GetFromApiAsync(url);
-    }
+    protected override string Request(string url) => $"{Url}{base.Request(url)}.json";
 }

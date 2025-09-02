@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Scale.io_API.Controllers.Abstract;
 
-public abstract class Controller<TService>(TService service) : ControllerBase where TService : IService
+public abstract class Controller<T>(T service) : ControllerBase where T : IService
 {
     protected virtual bool EmptyAsNotFound => false;
 

@@ -18,8 +18,8 @@ public static class DependencyInjection
 
     private static void AddClients(this IServiceCollection services)
     {
-        services.AddHttpClient<IApiClient<BarcodeResponse>, BarcodeClient>();
-        services.AddHttpClient<IApiClient<FreshFoodResponse>, FoodsClient>();
+        services.AddHttpClient<IClient<BarcodeResponse>, BarcodeClient>();
+        services.AddHttpClient<IClient<FreshFoodResponse>, FreshFoodsClient>();
     }
 
     private static void AddScoped(this IServiceCollection services)

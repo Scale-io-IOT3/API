@@ -3,7 +3,7 @@ using Core.Interface;
 
 namespace Core.DTO.Barcodes;
 
-public class BarcodeResponse : ISourceResponse
+public class BarcodeResponse : IResponse
 {
     [JsonPropertyName("product")] public Product Product { get; init; }
 }

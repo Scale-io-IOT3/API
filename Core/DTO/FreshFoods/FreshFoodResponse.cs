@@ -4,7 +4,7 @@ using Core.Interface;
 
 namespace Core.DTO.FreshFoods;
 
-public partial class FreshFoodResponse : ISourceResponse
+public partial class FreshFoodResponse : IResponse
 {
     [JsonPropertyName("foods")] public FreshFood[] Foods { get; init; }
 
