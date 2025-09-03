@@ -11,15 +11,15 @@ public static class Configuration
 {
     public static void Configure(this WebApplication app)
     {
-        if (app.Environment.IsDevelopment())
-        {
-            app.MapOpenApi();
-            app.MapScalarApiReference();
-        }
-
-        app.UseHttpsRedirection();
+        app.DevConfig();
         app.UseAuthorization();
         app.MapControllers();
+    }
+
+    private static void MapDocumentation(this WebApplication app)
+    {
+        app.MapOpenApi();
+        app.MapScalarApiReference();
     }
 
     public static void Configure(this WebApplicationBuilder builder)
@@ -35,16 +35,14 @@ public static class Configuration
 
         webAppBuilder.Services.AddApiVersioning(options =>
         {
+            options.AssumeDefaultVersionWhenUnspecified = true;
             options.DefaultApiVersion = new ApiVersion(1);
             options.ReportApiVersions = true;
-            options.ApiVersionReader = ApiVersionReader.Combine(
-                new UrlSegmentApiVersionReader(),
-                new HeaderApiVersionReader("X-api-version")
-            );
+            options.ApiVersionReader = new HeaderApiVersionReader("X-api-version");
         }).AddMvc().AddApiExplorer(options =>
         {
             options.GroupNameFormat = "'v'V";
-            options.SubstituteApiVersionInUrl = true;
+            options.SubstituteApiVersionInUrl = false;
         });
         webAppBuilder.Services.AddControllers().AddJsonOptions(options =>
         {
@@ -59,5 +57,11 @@ public static class Configuration
     {
         Env.Load();
         webApplicationBuilder.Configuration.AddEnvironmentVariables();
+    }
+
+    private static void DevConfig(this WebApplication app)
+    {
+        if (app.Environment.IsDevelopment()) app.MapDocumentation();
+        if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
     }
 }

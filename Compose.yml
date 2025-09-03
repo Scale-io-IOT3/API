@@ -1,5 +1,5 @@
 services:
-  scaleio:
+  scale.io:
     container_name: api
     build:
       context: .

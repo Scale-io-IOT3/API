@@ -9,7 +9,7 @@ public class Percentage
     private const int CalsPerGramProtein = 4;
     private const int CalsPerGramFat = 9;
 
-    [JsonPropertyName("carbohydrates")] public double CarbsPct { get; init; }
+    [JsonPropertyName("carbs")] public double CarbsPct { get; init; }
     [JsonPropertyName("fat")] public double FatPct { get; init; }
     [JsonPropertyName("proteins")] public double ProteinsPct { get; init; }
 

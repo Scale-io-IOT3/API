@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Scale.io_API.Controllers.Abstract;
 
+[ApiController]
+[Route("[controller]")]
 public abstract class Controller<T>(T service) : ControllerBase where T : IService
 {
     protected virtual bool EmptyAsNotFound => false;
@@ -16,5 +18,5 @@ public abstract class Controller<T>(T service) : ControllerBase where T : IServi
         return IsEmpty(response) && EmptyAsNotFound ? NotFound() : Ok(response);
     }
 
-    private static bool IsEmpty(FoodResponse response) => response.Foods == Array.Empty<Food>();
+    private static bool IsEmpty(FoodResponse response) => response.Foods.Length == 0;
 }
