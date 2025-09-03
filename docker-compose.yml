@@ -1,0 +1,13 @@
+services:
+  scaleio:
+    container_name: api
+    build:
+      context: .
+      dockerfile: API/Dockerfile
+    ports:
+      - "5175:8080"
+    environment:
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      - API_KEY=${API_KEY}
+    volumes:
+      - ./logs:/app/logs
