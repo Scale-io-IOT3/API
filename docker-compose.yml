@@ -4,6 +4,18 @@ services:
     build:
       context: .
       dockerfile: API/Dockerfile
+      target: dev
+    develop:
+      watch:
+        - path: ./API
+          action: sync
+          target: /app/API
+        - path: ./Core
+          action: sync
+          target: /app/Core
+        - path: ./Infrastructure
+          action: sync
+          target: /app/Infrastructure
     ports:
       - "5175:8080"
     environment:

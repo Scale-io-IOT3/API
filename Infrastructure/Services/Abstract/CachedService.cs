@@ -13,7 +13,7 @@ public abstract class CachedService(IMemoryCache cache) : Service
 
     public override async Task<FoodResponse?> FetchAsync(string input, double? grams)
     {
-        var key = Key(input, grams);
+        var key = CacheKey(input, grams);
         if (cache.TryGetValue(key, out FoodResponse? cached)) return cached;
 
         var response = await base.FetchAsync(input, grams);
@@ -22,6 +22,6 @@ public abstract class CachedService(IMemoryCache cache) : Service
         return response;
     }
 
-    protected virtual string Key(string input, double? w) => $"{input.Trim().ToLowerInvariant()}_{GetWeight(w)}";
+    protected virtual string CacheKey(string input, double? w) => $"{input.Trim().ToLowerInvariant()}_{GetWeight(w)}";
     protected static double GetWeight(double? weight) => weight is null or <= 0 ? 100.0 : weight.Value;
 }

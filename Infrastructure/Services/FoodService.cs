@@ -15,7 +15,7 @@ public class FoodService<T>(IClient<T> client, IMemoryCache cache) : CachedServi
         return Scale(response, grams);
     }
 
-    protected override string Key(string input, double? w) => $"{nameof(T)}_{base.Key(input, w)}";
+    protected override string CacheKey(string input, double? w) => $"{nameof(T)}_{base.CacheKey(input, w)}";
     private static FoodResponse Scale(T? response, double? w) => FoodResponse.From(response, GetWeight(w));
 }
 
