@@ -63,7 +63,7 @@ public static class Configuration
 
     private static void DevConfig(this WebApplication app)
     {
+        app.UseHttpsRedirection();
         if (app.Environment.IsDevelopment()) app.MapDocumentation();
-        if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
     }
 }
