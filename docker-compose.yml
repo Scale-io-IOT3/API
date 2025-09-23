@@ -18,6 +18,9 @@ services:
           target: /app/Infrastructure
     ports:
       - "5175:8080"
+    volumes:
+      - ./Infrastructure/Persistence:/app/data
     environment:
       - DOTNET_RUNNING_IN_CONTAINER=true
       - API_KEY=${API_KEY}
+      - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
