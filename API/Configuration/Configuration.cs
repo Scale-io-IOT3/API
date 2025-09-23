@@ -25,14 +25,14 @@ public static class Configuration
 
     public static void Configure(this WebApplicationBuilder builder)
     {
-        builder.ServicesConfig();
         builder.EnvironmentConfig();
+        builder.ServicesConfig();
     }
 
     private static void ServicesConfig(this WebApplicationBuilder webAppBuilder)
     {
         webAppBuilder.Services.AddCore();
-        webAppBuilder.Services.AddInfrastructure();
+        webAppBuilder.Services.AddInfrastructure(webAppBuilder.Configuration);
 
         webAppBuilder.Services.AddApiVersioning(options =>
         {
