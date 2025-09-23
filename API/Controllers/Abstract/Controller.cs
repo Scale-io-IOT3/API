@@ -10,6 +10,7 @@ public abstract class Controller<T>(T service) : ControllerBase where T : IServi
 {
     protected virtual bool EmptyAsNotFound => false;
 
+    [HttpGet("{input}")]
     protected async Task<ActionResult> Read(string input, double? grams)
     {
         var response = await service.FetchAsync(input, grams);
@@ -18,5 +19,8 @@ public abstract class Controller<T>(T service) : ControllerBase where T : IServi
         return IsEmpty(response) && EmptyAsNotFound ? NotFound() : Ok(response);
     }
 
-    private static bool IsEmpty(FoodResponse response) => response.Foods.Length == 0;
+    private static bool IsEmpty(FoodResponse response)
+    {
+        return response.Foods.Length == 0;
+    }
 }

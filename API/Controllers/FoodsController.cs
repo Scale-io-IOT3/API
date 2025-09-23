@@ -6,6 +6,8 @@ namespace Scale.io_API.Controllers;
 
 public class FoodsController(IFreshFoodsService service) : Controller<IFreshFoodsService>(service)
 {
-    [HttpGet("{food}")]
-    public Task<ActionResult> Read(string food, [FromQuery] double grams) => base.Read(food, grams);
+    public Task<ActionResult> Read(string food, [FromQuery] double grams)
+    {
+        return base.Read(food, grams);
+    }
 }
