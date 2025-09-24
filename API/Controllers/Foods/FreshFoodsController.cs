@@ -1,10 +1,10 @@
-using Core.Interface;
+using Core.Interface.Foods;
 using Microsoft.AspNetCore.Mvc;
-using Scale.io_API.Controllers.Abstract;
+using Scale.io_API.Controllers.Foods.Abstract;
 
 namespace Scale.io_API.Controllers.Foods;
 
-public class FreshFoodsController(IFreshFoodsService service) : Controller<IFreshFoodsService>(service)
+public class FreshFoodsController(IFreshFoodsService service) : FoodsController<IFreshFoodsService>(service)
 {
     [HttpGet("{food}")]
     public Task<ActionResult> Read(string food, [FromQuery] double grams)

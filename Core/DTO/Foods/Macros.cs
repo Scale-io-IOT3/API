@@ -1,5 +1,5 @@
 using System.Text.Json.Serialization;
-using Core.Interface;
+using Core.Interface.Foods;
 
 namespace Core.DTO.Foods;
 

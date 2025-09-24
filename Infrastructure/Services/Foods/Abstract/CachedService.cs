@@ -1,9 +1,9 @@
 using Core.DTO.Foods;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace Infrastructure.Services.Abstract;
+namespace Infrastructure.Services.Foods.Abstract;
 
-public abstract class CachedService(IMemoryCache cache) : Service
+public abstract class CachedService(IMemoryCache cache) : FoodsService
 {
     private readonly MemoryCacheEntryOptions _options = new()
     {
@@ -22,6 +22,13 @@ public abstract class CachedService(IMemoryCache cache) : Service
         return response;
     }
 
-    protected virtual string CacheKey(string input, double? w) => $"{input.Trim().ToLowerInvariant()}_{GetWeight(w)}";
-    protected static double GetWeight(double? weight) => weight is null or <= 0 ? 100.0 : weight.Value;
+    protected virtual string CacheKey(string input, double? w)
+    {
+        return $"{input.Trim().ToLowerInvariant()}_{GetWeight(w)}";
+    }
+
+    protected static double GetWeight(double? weight)
+    {
+        return weight is null or <= 0 ? 100.0 : weight.Value;
+    }
 }

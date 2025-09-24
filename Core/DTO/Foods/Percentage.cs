@@ -1,5 +1,5 @@
 using System.Text.Json.Serialization;
-using Core.Interface;
+using Core.Interface.Foods;
 
 namespace Core.DTO.Foods;
 
@@ -13,7 +13,10 @@ public class Percentage
     [JsonPropertyName("fat")] public double FatPct { get; init; }
     [JsonPropertyName("proteins")] public double ProteinsPct { get; init; }
 
-    private static double R(double cal) => Math.Round(cal * 100, 1);
+    private static double R(double cal)
+    {
+        return Math.Round(cal * 100, 1);
+    }
 
     public static Percentage From(IMacroSource source)
     {

@@ -1,6 +1,6 @@
 using Core.DTO.Foods;
 
-namespace Core.Interface;
+namespace Core.Interface.Foods;
 
 public interface IFoodService
 {

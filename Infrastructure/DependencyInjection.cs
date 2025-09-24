@@ -2,9 +2,10 @@
 using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
 using Core.Interface;
+using Core.Interface.Foods;
 using Infrastructure.Clients;
 using Infrastructure.Persistence.Contexts;
-using Infrastructure.Services;
+using Infrastructure.Services.Foods;
 using Infrastructure.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;

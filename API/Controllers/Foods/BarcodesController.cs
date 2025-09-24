@@ -1,10 +1,10 @@
-using Core.Interface;
+using Core.Interface.Foods;
 using Microsoft.AspNetCore.Mvc;
-using Scale.io_API.Controllers.Abstract;
+using Scale.io_API.Controllers.Foods.Abstract;
 
 namespace Scale.io_API.Controllers.Foods;
 
-public class BarcodesController(IBarcodeService service) : Controller<IBarcodeService>(service)
+public class BarcodesController(IBarcodeService service) : FoodsController<IBarcodeService>(service)
 {
     protected override bool EmptyAsNotFound => true;
 

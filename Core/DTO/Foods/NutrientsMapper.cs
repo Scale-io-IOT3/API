@@ -1,5 +1,5 @@
 using Core.DTO.FreshFoods;
-using Core.Interface;
+using Core.Interface.Foods;
 
 namespace Core.DTO.Foods;
 

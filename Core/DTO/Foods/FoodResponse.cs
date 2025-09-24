@@ -5,7 +5,7 @@ using Core.Interface;
 
 namespace Core.DTO.Foods;
 
-public class FoodResponse
+public class FoodResponse : IResponse
 {
     [JsonPropertyName("foods")] public Food[] Foods { get; set; }
 
@@ -45,5 +45,8 @@ public class FoodResponse
         return new FoodResponse { Foods = foods };
     }
 
-    private static FoodResponse Empty() => new() { Foods = [] };
+    private static FoodResponse Empty()
+    {
+        return new FoodResponse { Foods = [] };
+    }
 }

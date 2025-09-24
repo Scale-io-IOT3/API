@@ -1,4 +1,4 @@
-namespace Core.Interface;
+namespace Core.Interface.Foods;
 
 public interface IMacroSource
 {

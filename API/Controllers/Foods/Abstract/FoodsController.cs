@@ -1,12 +1,12 @@
 using Core.DTO.Foods;
-using Core.Interface;
+using Core.Interface.Foods;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Scale.io_API.Controllers.Abstract;
+namespace Scale.io_API.Controllers.Foods.Abstract;
 
 [ApiController]
 [Route("[controller]")]
-public abstract class Controller<T>(T service) : ControllerBase where T : IFoodService
+public abstract class FoodsController<T>(T service) : ControllerBase where T : IFoodService
 {
     protected virtual bool EmptyAsNotFound => false;
 
