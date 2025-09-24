@@ -8,13 +8,16 @@ public class Macros : IMacroSource
     [JsonPropertyName("energy-kcal_value_computed")]
     public double E { private get; init; }
 
-    [JsonPropertyName("calories")] public int Calories => (int)Math.Round(E);
+    [JsonPropertyName("percentages")] public Percentage Percentages => Percentage.From(this);
+    [JsonIgnore] public int Calories => (int)Math.Round(E);
     [JsonPropertyName("carbohydrates")] public double Carbohydrates { get; init; }
     [JsonPropertyName("fat")] public double Fat { get; init; }
     [JsonPropertyName("proteins")] public double Proteins { get; init; }
-    [JsonPropertyName("percentages")] public Percentage Percentages => Percentage.From(this);
 
-    private static double R(double value) => Math.Round(value, 1);
+    private static double R(double value)
+    {
+        return Math.Round(value, 1);
+    }
 
     public Macros For(double grams)
     {
@@ -28,11 +31,14 @@ public class Macros : IMacroSource
         };
     }
 
-    public static Macros From(IMacroSource source) => new()
+    public static Macros From(IMacroSource source)
     {
-        E = R(source.Calories),
-        Carbohydrates = R(source.Carbohydrates),
-        Fat = R(source.Fat),
-        Proteins = R(source.Proteins)
-    };
+        return new Macros
+        {
+            E = R(source.Calories),
+            Carbohydrates = R(source.Carbohydrates),
+            Fat = R(source.Fat),
+            Proteins = R(source.Proteins)
+        };
+    }
 }

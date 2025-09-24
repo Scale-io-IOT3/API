@@ -8,6 +8,7 @@ public class BarcodesController(IBarcodeService service) : Controller<IBarcodeSe
 {
     protected override bool EmptyAsNotFound => true;
 
+    [HttpGet("{code}")]
     public Task<ActionResult> Read(string code, [FromQuery] double grams)
     {
         return base.Read(code, grams);

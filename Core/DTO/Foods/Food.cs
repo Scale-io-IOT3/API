@@ -7,9 +7,11 @@ namespace Core.DTO.Foods;
 public class Food
 {
     [JsonPropertyName("product_name")] public string HiddenName { private get; set; }
+    [JsonPropertyName("nutriments")] public Macros HiddenMacros { private get; set; }
     [JsonPropertyName("name")] public string Name => HiddenName;
     [JsonPropertyName("brands")] public string? Brands { get; private set; }
-    [JsonPropertyName("nutriments")] public Macros HiddenMacros { private get; set; }
+    [JsonPropertyName("calories")] public int Calories => Macros.Calories;
+    [JsonPropertyName("quantity")] public double Quantity { get; private set; }
     [JsonPropertyName("macros")] public Macros Macros => HiddenMacros;
 
     public static Food FromFreshFood(FreshFood food)
@@ -36,5 +38,6 @@ public class Food
     public void Scale(double weight)
     {
         HiddenMacros = HiddenMacros.For(weight);
+        Quantity = weight;
     }
 }
