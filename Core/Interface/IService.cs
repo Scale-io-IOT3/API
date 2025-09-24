@@ -1,6 +1,3 @@
 namespace Core.Interface;
 
-public interface IService<T> where T : IResponse
-{
-    Task<T?> FetchAsync();
-}
+public interface IService<T, U> where T : IResponse where U : IRequest;

@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Core.Models.API.Responses;
 
-public class LoginResponse
+public class LoginResponse : Response
 {
     [Required] public required string User { get; set; }
     [Required] public required string AccessToken { get; set; }

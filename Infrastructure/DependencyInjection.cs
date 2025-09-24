@@ -3,9 +3,11 @@ using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
 using Core.Interface;
 using Core.Interface.Foods;
+using Core.Interface.Login;
 using Infrastructure.Clients;
 using Infrastructure.Persistence.Contexts;
 using Infrastructure.Services.Foods;
+using Infrastructure.Services.Login;
 using Infrastructure.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -35,6 +37,7 @@ public static class DependencyInjection
     private static void AddScoped(this IServiceCollection services)
     {
         services.AddScoped<IAuth, Authenticator>();
+        services.AddScoped<ILoginService, LoginService>();
         services.AddScoped<IBarcodeService, BarcodeFoodService>();
         services.AddScoped<IFreshFoodsService, FreshFoodService>();
     }
@@ -51,9 +54,9 @@ public static class DependencyInjection
             options.SaveToken = true;
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidIssuer = configuration["JwtConfig:Issuer"],
-                ValidAudience = configuration["JwtConfig:Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JwtConfig:Key"]!)),
+                ValidIssuer = configuration["Jwt:Issuer"],
+                ValidAudience = configuration["Jwt:Audience"],
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!)),
                 ValidateAudience = true,
                 ValidateIssuer = true,
                 ValidateLifetime = true,
