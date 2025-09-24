@@ -17,7 +17,7 @@ CREATE TABLE Meal
 
 CREATE TABLE Food
 (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    id       TEXT PRIMARY KEY,
     meal_id  INTEGER NOT NULL,
     quantity REAL    NOT NULL,
     calories INTEGER,
@@ -30,7 +30,7 @@ CREATE TABLE Food
 CREATE TABLE Macros
 (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    food_id       INTEGER NOT NULL,
+    food_id       TEXT NOT NULL,
     macro_type_id INTEGER NOT NULL,
     amount        REAL    NOT NULL,
     percentage    REAL    NOT NULL,
