@@ -1,13 +1,16 @@
-﻿using Core.DTO.Barcodes;
+﻿using System.Text;
+using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
 using Core.Interface;
 using Infrastructure.Clients;
 using Infrastructure.Persistence.Contexts;
 using Infrastructure.Services;
 using Infrastructure.Utils;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Infrastructure;
 
@@ -15,10 +18,8 @@ public static class DependencyInjection
 {
     public static void AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<AppDbContext>(options =>
-        {
-            options.UseSqlite(configuration["DB_CONNECTION_STRING"]);
-        });
+        services.AddAuthentication(configuration);
+        services.AddDbContext<AppDbContext>(options => { options.UseSqlite(configuration["DB_CONNECTION_STRING"]); });
         services.AddMemoryCache();
         services.AddScoped();
         services.AddClients();
@@ -35,5 +36,30 @@ public static class DependencyInjection
         services.AddScoped<IAuth, Authenticator>();
         services.AddScoped<IBarcodeService, BarcodeFoodService>();
         services.AddScoped<IFreshFoodsService, FreshFoodService>();
+    }
+
+    private static void AddAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+        }).AddJwtBearer(options =>
+        {
+            options.SaveToken = true;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidIssuer = configuration["JwtConfig:Issuer"],
+                ValidAudience = configuration["JwtConfig:Audience"],
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JwtConfig:Key"]!)),
+                ValidateAudience = true,
+                ValidateIssuer = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true
+            };
+
+            services.AddAuthorization();
+        });
     }
 }

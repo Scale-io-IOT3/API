@@ -13,6 +13,7 @@ public static class Configuration
     public static void Configure(this WebApplication app)
     {
         app.DevConfig();
+        app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();
     }
