@@ -2,7 +2,7 @@ using Core.Interface;
 using Microsoft.AspNetCore.Mvc;
 using Scale.io_API.Controllers.Abstract;
 
-namespace Scale.io_API.Controllers;
+namespace Scale.io_API.Controllers.Foods;
 
 public class BarcodesController(IBarcodeService service) : Controller<IBarcodeService>(service)
 {

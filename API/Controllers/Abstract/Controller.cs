@@ -6,7 +6,7 @@ namespace Scale.io_API.Controllers.Abstract;
 
 [ApiController]
 [Route("[controller]")]
-public abstract class Controller<T>(T service) : ControllerBase where T : IService
+public abstract class Controller<T>(T service) : ControllerBase where T : IFoodService
 {
     protected virtual bool EmptyAsNotFound => false;
 
