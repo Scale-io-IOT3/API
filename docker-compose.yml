@@ -5,21 +5,14 @@ services:
       context: .
       dockerfile: API/Dockerfile
       target: dev
-    develop:
-      watch:
-        - path: ./API
-          action: sync
-          target: /app/API
-        - path: ./Core
-          action: sync
-          target: /app/Core
-        - path: ./Infrastructure
-          action: sync
-          target: /app/Infrastructure
+    volumes:
+      - ./API:/app/API
+      - ./Core:/app/Core
+      - ./Infrastructure:/app/Infrastructure
+      - ./Infrastructure/Persistence:/app/data
+    command: dotnet watch run --project API/API.csproj --urls http://0.0.0.0:8080
     ports:
       - "5175:8080"
-    volumes:
-      - ./Infrastructure/Persistence:/app/data
     environment:
       - DOTNET_RUNNING_IN_CONTAINER=true
       - API_KEY=${API_KEY}
