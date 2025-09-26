@@ -30,7 +30,7 @@ CREATE TABLE Food
 CREATE TABLE Macros
 (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    food_id       TEXT NOT NULL,
+    food_id       TEXT    NOT NULL,
     macro_type_id INTEGER NOT NULL,
     amount        REAL    NOT NULL,
     percentage    REAL    NOT NULL,
@@ -53,3 +53,7 @@ VALUES ('Fat');
 
 INSERT INTO MacroType (name)
 VALUES ('Carbs');
+
+INSERT INTO User (username, password_hash)
+VALUES ('Monke',
+        'bebe33908ec5f89eb65bc48a64e769021d93f2541523f9e43d62140bb5bdf7130608afb41a2bedeb85533da0a27805fa4f18139bef91b8b44deab785ffcea460')

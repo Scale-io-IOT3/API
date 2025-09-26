@@ -1,11 +1,13 @@
-﻿using System.Text;
-using Core.DTO.Barcodes;
+﻿using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
 using Core.Interface;
 using Core.Interface.Foods;
 using Core.Interface.Login;
+using Core.Models.API;
+using Core.Models.Entities;
 using Infrastructure.Clients;
 using Infrastructure.Persistence.Contexts;
+using Infrastructure.Repositories;
 using Infrastructure.Services.Foods;
 using Infrastructure.Services.Login;
 using Infrastructure.Utils;
@@ -14,6 +16,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using TokenHandler = Infrastructure.Utils.TokenHandler;
 
 namespace Infrastructure;
 
@@ -21,8 +24,12 @@ public static class DependencyInjection
 {
     public static void AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.AddAuthentication(configuration);
-        services.AddDbContext<AppDbContext>(options => { options.UseSqlite(configuration["DB_CONNECTION_STRING"]); });
+        services.AddDbContext<AppDbContext>(options => options.UseSqlite(
+                configuration["DB_CONNECTION_STRING"], x => x.MigrationsAssembly("Infrastructure")
+            )
+        );
         services.AddMemoryCache();
         services.AddScoped();
         services.AddClients();
@@ -37,6 +44,8 @@ public static class DependencyInjection
     private static void AddScoped(this IServiceCollection services)
     {
         services.AddScoped<IAuth, Authenticator>();
+        services.AddScoped<IRepo<User>, UserRepository>();
+        services.AddScoped<ITokenHandler, TokenHandler>();
         services.AddScoped<ILoginService, LoginService>();
         services.AddScoped<IBarcodeService, BarcodeFoodService>();
         services.AddScoped<IFreshFoodsService, FreshFoodService>();
@@ -44,6 +53,8 @@ public static class DependencyInjection
 
     private static void AddAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
+        var jwtSection = configuration.GetSection("Jwt");
+        var jwtOptions = jwtSection.Get<JwtOptions>()!;
         services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -54,16 +65,16 @@ public static class DependencyInjection
             options.SaveToken = true;
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidIssuer = configuration["Jwt:Issuer"],
-                ValidAudience = configuration["Jwt:Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:Key"]!)),
+                ValidIssuer = jwtOptions.Issuer,
+                ValidAudience = jwtOptions.Audience,
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Convert.FromBase64String(jwtOptions.Key)
+                ),
                 ValidateAudience = true,
                 ValidateIssuer = true,
                 ValidateLifetime = true,
                 ValidateIssuerSigningKey = true
             };
-
-            services.AddAuthorization();
         });
     }
 }

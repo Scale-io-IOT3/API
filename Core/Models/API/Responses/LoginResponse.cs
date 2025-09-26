@@ -4,7 +4,7 @@ namespace Core.Models.API.Responses;
 
 public class LoginResponse : Response
 {
-    [Required] public required string User { get; set; }
+    [Required] public required string Username { get; set; }
     [Required] public required string AccessToken { get; set; }
     [Required] public int ExpiresIn { get; set; }
 }
