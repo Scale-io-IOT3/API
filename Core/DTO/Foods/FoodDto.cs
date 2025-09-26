@@ -4,40 +4,40 @@ using Core.DTO.FreshFoods;
 
 namespace Core.DTO.Foods;
 
-public class Food
+public class FoodDto
 {
-    [JsonPropertyName("product_name")] public string HiddenName { private get; set; }
-    [JsonPropertyName("nutriments")] public Macros HiddenMacros { private get; set; }
+    [JsonPropertyName("product_name")] public required string HiddenName { private get; set; }
+    [JsonPropertyName("nutriments")] public required MacrosDto HiddenMacrosDto { private get; set; }
     [JsonPropertyName("name")] public string Name => HiddenName;
     [JsonPropertyName("brands")] public string? Brands { get; private set; }
-    [JsonPropertyName("calories")] public int Calories => Macros.Calories;
+    [JsonPropertyName("calories")] public int Calories => MacrosDto.Calories;
     [JsonPropertyName("quantity")] public double Quantity { get; private set; }
-    [JsonPropertyName("macros")] public Macros Macros => HiddenMacros;
+    [JsonPropertyName("macros")] public MacrosDto MacrosDto => HiddenMacrosDto;
 
-    public static Food FromFreshFood(FreshFood food)
+    public static FoodDto FromFreshFood(FreshFood food)
     {
         var source = new NutrientsMapper(food.FoodNutrients);
-        return new Food
+        return new FoodDto
         {
-            HiddenMacros = Macros.From(source),
+            HiddenMacrosDto = MacrosDto.From(source),
             HiddenName = food.Description,
             Brands = food.Category
         };
     }
 
-    public static Food FromProduct(Product food)
+    public static FoodDto FromProduct(Product food)
     {
-        return new Food
+        return new FoodDto
         {
             Brands = food.Brands,
             HiddenName = food.Name,
-            HiddenMacros = food.Macros
+            HiddenMacrosDto = food.MacrosDto
         };
     }
 
     public void Scale(double weight)
     {
-        HiddenMacros = HiddenMacros.For(weight);
+        HiddenMacrosDto = HiddenMacrosDto.For(weight);
         Quantity = weight;
     }
 }

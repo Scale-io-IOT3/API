@@ -5,9 +5,9 @@ namespace Core.DTO.Barcodes;
 
 public class Product
 {
-    [JsonPropertyName("brands")] public string Brands { get; set; }
+    [JsonPropertyName("brands")] public required string Brands { get; set; }
 
-    [JsonPropertyName("product_name")] public string Name { get; set; }
+    [JsonPropertyName("product_name")] public required string Name { get; set; }
 
-    [JsonPropertyName("nutriments")] public Macros Macros { get; set; }
+    [JsonPropertyName("nutriments")] public required MacrosDto MacrosDto { get; set; }
 }

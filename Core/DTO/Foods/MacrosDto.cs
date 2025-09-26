@@ -3,7 +3,7 @@ using Core.Interface.Foods;
 
 namespace Core.DTO.Foods;
 
-public class Macros : IMacroSource
+public class MacrosDto : IMacroSource
 {
     [JsonPropertyName("energy-kcal_value_computed")]
     public double E { private get; init; }
@@ -19,10 +19,10 @@ public class Macros : IMacroSource
         return Math.Round(value, 1);
     }
 
-    public Macros For(double grams)
+    public MacrosDto For(double grams)
     {
         var factor = grams / 100.0;
-        return new Macros
+        return new MacrosDto
         {
             E = R(E * factor),
             Carbohydrates = R(Carbohydrates * factor),
@@ -31,9 +31,9 @@ public class Macros : IMacroSource
         };
     }
 
-    public static Macros From(IMacroSource source)
+    public static MacrosDto From(IMacroSource source)
     {
-        return new Macros
+        return new MacrosDto
         {
             E = R(source.Calories),
             Carbohydrates = R(source.Carbohydrates),

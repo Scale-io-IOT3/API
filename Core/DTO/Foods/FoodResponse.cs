@@ -7,12 +7,12 @@ namespace Core.DTO.Foods;
 
 public class FoodResponse : IResponse
 {
-    [JsonPropertyName("foods")] public Food[] Foods { get; set; }
+    [JsonPropertyName("foods")] public required FoodDto[] Foods { get; set; }
 
 
     private static FoodResponse FromBarcodeResponse(BarcodeResponse? response, double grams)
     {
-        return response?.Product == null ? Empty() : FromFoods([Food.FromProduct(response.Product)], grams);
+        return response?.Product == null ? Empty() : FromFoods([FoodDto.FromProduct(response.Product)], grams);
     }
 
     private static FoodResponse FromFreshFoodResponse(FreshFoodResponse? response, double grams)
@@ -21,7 +21,7 @@ public class FoodResponse : IResponse
 
         var foods = response.Filter()
             .Foods
-            .Select(Food.FromFreshFood)
+            .Select(FoodDto.FromFreshFood)
             .ToArray();
 
         return FromFoods(foods, grams);
@@ -39,7 +39,7 @@ public class FoodResponse : IResponse
     }
 
 
-    private static FoodResponse FromFoods(Food[] foods, double grams)
+    private static FoodResponse FromFoods(FoodDto[] foods, double grams)
     {
         foreach (var f in foods) f.Scale(grams);
         return new FoodResponse { Foods = foods };
