@@ -1,12 +1,11 @@
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Core.Interface;
 
 namespace Core.DTO.FreshFoods;
 
-public partial class FreshFoodResponse : IResponse
+public class FreshFoodResponse : IResponse
 {
-    [JsonPropertyName("foods")] public FreshFood[] Foods { get; init; }
+    [JsonPropertyName("foods")] public required FreshFood[] Foods { get; init; }
 
     public FreshFoodResponse Filter()
     {

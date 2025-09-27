@@ -9,11 +9,11 @@ namespace Infrastructure.Services.Login;
 
 public class LoginService(ITokenHandler tokenHandler, IRepo<User> repo) : ILoginService
 {
-    private readonly Passport _passport = new(repo);
+    private readonly Cryptography _cryptography = new(repo);
 
     public async Task<LoginResponse?> Authenticate(LoginRequest request)
     {
-        if (!await _passport.Validate(request)) return null;
+        if (!await _cryptography.Validate(request)) return null;
         var token = tokenHandler.CreateToken(request.Username, out var expiresIn);
 
         return new LoginResponse

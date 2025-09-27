@@ -28,7 +28,6 @@ RUN dotnet publish API/API.csproj -c Release -o /app/publish /p:UseAppHost=false
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
-COPY ./Infrastructure/Persistence/init.sql /app/init.sql
 ENTRYPOINT ["dotnet", "API.dll"]
 
 # ------------------------------
@@ -41,5 +40,4 @@ RUN apt-get update && apt-get install -y sqlite3 libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
-RUN chmod +x /app/entrypoint.sh
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["dotnet", "watch", "run", "--project", "API/API.csproj", "--urls", "http://0.0.0.0:8080"]

@@ -12,9 +12,9 @@ public class FreshFood
         "Energy"
     };
 
-    [JsonPropertyName("description")] public string Description { get; init; }
-    [JsonPropertyName("foodCategory")] public string Category { get; init; }
-    [JsonPropertyName("foodNutrients")] public Nutrient[] FoodNutrients { get; set; }
+    [JsonPropertyName("description")] public required string Description { get; init; }
+    [JsonPropertyName("foodCategory")] public required string Category { get; init; }
+    [JsonPropertyName("foodNutrients")] public required Nutrient[] FoodNutrients { get; set; }
 
     public Nutrient[] GetMacros()
     {

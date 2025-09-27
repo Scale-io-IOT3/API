@@ -4,6 +4,11 @@ using Asp.Versioning;
 using Core;
 using DotNetEnv;
 using Infrastructure;
+using Infrastructure.Persistence.Contexts;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption;
+using Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ConfigurationModel;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 namespace Scale.io_API.Configuration;
@@ -12,10 +17,11 @@ public static class Configuration
 {
     public static void Configure(this WebApplication app)
     {
-        app.DevConfig();
+        app.UseHttpsRedirection();
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();
+        app.DevConfig();
     }
 
     private static void MapDocumentation(this WebApplication app)
@@ -53,6 +59,14 @@ public static class Configuration
             options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals;
         });
 
+        webAppBuilder.Services.AddDataProtection().UseCryptographicAlgorithms(
+            new AuthenticatedEncryptorConfiguration
+            {
+                EncryptionAlgorithm = EncryptionAlgorithm.AES_256_CBC,
+                ValidationAlgorithm = ValidationAlgorithm.HMACSHA256
+            }
+        );
+
         webAppBuilder.Services.AddOpenApi();
     }
 
@@ -64,7 +78,14 @@ public static class Configuration
 
     private static void DevConfig(this WebApplication app)
     {
-        app.UseHttpsRedirection();
-        if (app.Environment.IsDevelopment()) app.MapDocumentation();
+        if (!app.Environment.IsDevelopment()) return;
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Database.Migrate();
+        }
+
+        app.MapDocumentation();
     }
 }

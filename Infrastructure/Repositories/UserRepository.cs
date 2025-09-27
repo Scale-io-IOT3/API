@@ -9,10 +9,7 @@ public class UserRepository(AppDbContext context) : IRepo<User>
 {
     public async Task<List<User>> GetAll()
     {
-        if (context == null) throw new InvalidOperationException("DbContext is null");
-        return context.Users == null
-            ? throw new InvalidOperationException("Users DbSet is null")
-            : await context.Users.ToListAsync();
+        return await context.Users.ToListAsync();
     }
 
 

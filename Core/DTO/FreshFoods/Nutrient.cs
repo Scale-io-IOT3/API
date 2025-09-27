@@ -4,7 +4,7 @@ namespace Core.DTO.FreshFoods;
 
 public class Nutrient
 {
-    [JsonPropertyName("nutrientName")] public string NutrientName { get; set; }
+    [JsonPropertyName("nutrientName")] public required string NutrientName { get; set; }
     [JsonPropertyName("value")] public double Value { get; set; }
-    [JsonPropertyName("unitName")] public string UnitName { get; set; }
+    [JsonPropertyName("unitName")] public required string UnitName { get; set; }
 }

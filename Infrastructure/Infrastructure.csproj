@@ -13,9 +13,9 @@
 
     <ItemGroup>
         <PackageReference Include="DotNetEnv" Version="3.1.1"/>
-        <PackageReference Include="JetBrains.Annotations" Version="2025.2.2"/>
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.9"/>
         <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.3.1"/>
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.9"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.9"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.9">
             <PrivateAssets>all</PrivateAssets>
@@ -26,7 +26,6 @@
         <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.9"/>
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9"/>
         <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.9"/>
-        <PackageReference Include="SQLite" Version="3.13.0"/>
     </ItemGroup>
 
     <ItemGroup>

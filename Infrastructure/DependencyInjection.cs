@@ -12,7 +12,6 @@ using Infrastructure.Services.Foods;
 using Infrastructure.Services.Login;
 using Infrastructure.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -26,10 +25,6 @@ public static class DependencyInjection
     {
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.AddAuthentication(configuration);
-        services.AddDbContext<AppDbContext>(options => options.UseSqlite(
-                configuration["DB_CONNECTION_STRING"], x => x.MigrationsAssembly("Infrastructure")
-            )
-        );
         services.AddMemoryCache();
         services.AddScoped();
         services.AddClients();
@@ -49,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<ILoginService, LoginService>();
         services.AddScoped<IBarcodeService, BarcodeFoodService>();
         services.AddScoped<IFreshFoodsService, FreshFoodService>();
+        services.AddScoped<AppDbContext>();
     }
 
     private static void AddAuthentication(this IServiceCollection services, IConfiguration configuration)
@@ -76,5 +72,6 @@ public static class DependencyInjection
                 ValidateIssuerSigningKey = true
             };
         });
+        services.AddAuthorization();
     }
 }

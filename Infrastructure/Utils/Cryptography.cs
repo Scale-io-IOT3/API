@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Identity;
 
 namespace Infrastructure.Utils;
 
-public class Passport(IRepo<User> repo)
+public class Cryptography(IRepo<User> repo)
 {
     private readonly PasswordHasher<User> _hasher = new();
 
