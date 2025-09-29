@@ -13,14 +13,17 @@ public class LoginService(ITokenHandler tokenHandler, IRepo<User> repo) : ILogin
 
     public async Task<LoginResponse?> Authenticate(LoginRequest request)
     {
-        if (!await _cryptography.Validate(request)) return null;
-        var token = tokenHandler.CreateToken(request.Username, out var expiresIn);
+        var (valid, user) = await _cryptography.Validate(request);
+        if (!valid || user is null) return null;
+
+        var token = await tokenHandler.GetOrCreate(user);
 
         return new LoginResponse
         {
-            AccessToken = token,
-            ExpiresIn = expiresIn,
-            Username = request.Username
+            AccessToken = token.Access,
+            RefreshToken = token.Refresh,
+            ExpiresIn = (int)(token.AccessExpiry - DateTime.UtcNow).TotalSeconds,
+            Username = user.Username
         };
     }
 }

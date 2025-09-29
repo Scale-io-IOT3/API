@@ -12,10 +12,21 @@ public class UserRepository(AppDbContext context) : IRepo<User>
         return await context.Users.ToListAsync();
     }
 
-
-    public async Task<User?> Get(string username)
+    public async Task<User?> FindByUsername(string username)
     {
         var users = await GetAll();
         return users.FirstOrDefault(u => u.Username == username);
+    }
+
+    public async Task<User?> FindById(int id)
+    {
+        var users = await GetAll();
+        return users.FirstOrDefault(u => u.Id == id);
+    }
+
+    public async Task CreateOrUpdate(User user)
+    {
+        await context.Users.AddAsync(user);
+        await context.SaveChangesAsync();
     }
 }

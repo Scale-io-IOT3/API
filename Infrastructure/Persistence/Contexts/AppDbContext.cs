@@ -1,3 +1,4 @@
+using Core.Models.API;
 using Core.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -7,6 +8,7 @@ namespace Infrastructure.Persistence.Contexts;
 public class AppDbContext(IConfiguration configuration) : DbContext
 {
     public DbSet<User> Users => Set<User>();
+    public DbSet<Token> Tokens => Set<Token>();
     public DbSet<Meal> Meals => Set<Meal>();
     public DbSet<Food> Foods => Set<Food>();
     public DbSet<Macros> Macros => Set<Macros>();

@@ -38,13 +38,24 @@ public static class DependencyInjection
 
     private static void AddScoped(this IServiceCollection services)
     {
+        services.AddScoped<AppDbContext>();
+        services.AddRepositories();
+        services.AddServices();
+    }
+
+    private static void AddServices(this IServiceCollection services)
+    {
         services.AddScoped<IAuth, Authenticator>();
-        services.AddScoped<IRepo<User>, UserRepository>();
         services.AddScoped<ITokenHandler, TokenHandler>();
         services.AddScoped<ILoginService, LoginService>();
         services.AddScoped<IBarcodeService, BarcodeFoodService>();
         services.AddScoped<IFreshFoodsService, FreshFoodService>();
-        services.AddScoped<AppDbContext>();
+    }
+
+    private static void AddRepositories(this IServiceCollection services)
+    {
+        services.AddScoped<IRepo<User>, UserRepository>();
+        services.AddScoped<IRepo<Token>, TokenRepository>();
     }
 
     private static void AddAuthentication(this IServiceCollection services, IConfiguration configuration)

@@ -9,10 +9,12 @@ public class Cryptography(IRepo<User> repo)
 {
     private readonly PasswordHasher<User> _hasher = new();
 
-    public async Task<bool> Validate(LoginRequest request)
+    public async Task<(bool IsValid, User? User)> Validate(LoginRequest request)
     {
-        var user = await repo.Get(request.Username);
-        return user is not null && Verify(user, request.Password);
+        var user = await repo.FindByUsername(request.Username);
+        if (user is not null && Verify(user, request.Password)) return (true, user);
+
+        return (false, null);
     }
 
     private string HashPassword(User user, string plaintext)

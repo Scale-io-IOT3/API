@@ -1,6 +1,9 @@
+using Core.Models.API;
+using Core.Models.Entities;
+
 namespace Core.Interface.Login;
 
 public interface ITokenHandler
 {
-    string CreateToken(string username, out int expiresIn);
+    Task<Token> GetOrCreate(User user);
 }
