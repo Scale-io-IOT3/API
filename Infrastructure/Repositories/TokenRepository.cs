@@ -1,6 +1,7 @@
 using Core.Interface;
 using Core.Models.API;
 using Infrastructure.Persistence.Contexts;
+using Infrastructure.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
@@ -29,21 +30,33 @@ public class TokenRepository(AppDbContext context) : IRepo<Token>
         var existing = await context.Tokens
             .FirstOrDefaultAsync(t => t.Id == token.Id);
 
-        if (existing is not null)
+        var t = HashToken(token);
+
+        if (existing is null)
         {
-            Map(token, existing);
-            await Update(existing);
+            await Create(t);
             return;
         }
 
-        await Create(token);
+        Map(t, existing);
+        await Update(existing);
     }
 
-    private static void Map(Token newToken, Token existing)
+    private static Token HashToken(Token token)
     {
-        existing.Refresh = newToken.Refresh;
-        existing.Access = newToken.Access;
-        existing.RefreshExpiry = newToken.RefreshExpiry;
+        return new Token
+        {
+            Id = token.Id,
+            Expiry = token.Expiry,
+            Refresh = Cryptography.Hash(token.Refresh, token.User),
+            User = token.User
+        };
+    }
+
+    private static void Map(Token newToken, Token old)
+    {
+        old.Refresh = newToken.Refresh;
+        old.Expiry = newToken.Expiry;
     }
 
     private async Task Update(Token token)

@@ -1,3 +1,4 @@
+using Core.DTO.Auth;
 using Core.Interface;
 using Core.Models.API.Requests;
 using Core.Models.Entities;
@@ -7,24 +8,24 @@ namespace Infrastructure.Utils;
 
 public class Cryptography(IRepo<User> repo)
 {
-    private readonly PasswordHasher<User> _hasher = new();
+    private static readonly PasswordHasher<User> Hasher = new();
 
-    public async Task<(bool IsValid, User? User)> Validate(LoginRequest request)
+    public async Task<UserStatus> Authenticate(LoginRequest request)
     {
         var user = await repo.FindByUsername(request.Username);
-        if (user is not null && Verify(user, request.Password)) return (true, user);
+        var status = Verify(request.Password, user);
 
-        return (false, null);
+        return new UserStatus(status, user);
     }
 
-    private string HashPassword(User user, string plaintext)
+    public static string Hash(string plaintext, User? user = null)
     {
-        return _hasher.HashPassword(user, plaintext);
+        return Hasher.HashPassword(user, plaintext);
     }
 
-    private bool Verify(User user, string plaintext)
+    private static bool Verify(string plaintext, User? user = null, string hash = "")
     {
-        var result = _hasher.VerifyHashedPassword(user, user.PasswordHash, plaintext);
+        var result = Hasher.VerifyHashedPassword(user, user?.PasswordHash ?? hash, plaintext);
         return result is PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded;
     }
 }

@@ -1,9 +1,9 @@
-using Core.Models.API;
+using Core.Models.API.Responses;
 using Core.Models.Entities;
 
 namespace Core.Interface.Login;
 
 public interface ITokenHandler
 {
-    Task<Token> GetOrCreate(User user);
+    Task<LoginResponse> Create(User user);
 }

@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using Core.Interface;
 using Core.Interface.Login;
 using Core.Models.API;
+using Core.Models.API.Responses;
 using Core.Models.Entities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -14,33 +15,34 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
 {
     private readonly JwtOptions _options = options.Value;
 
-    public async Task<Token> GetOrCreate(User user)
-    {
-        var token = await repo.FindById(user.Id);
-        if (token is null || token.RefreshExpiry < DateTime.UtcNow) return await CreateToken(user);
-
-        return token;
-    }
-
-    private async Task<Token> CreateToken(User user)
+    public async Task<LoginResponse> Create(User user)
     {
         var expiry = DateTime.UtcNow.AddMinutes(_options.TokenValidityMins);
+        return await Generate(user, expiry);
+    }
 
+    private async Task<LoginResponse> Generate(User user, DateTime expiry)
+    {
+        var response = new LoginResponse
+        {
+            Username = user.Username,
+            AccessToken = GenerateAccessToken(user, expiry),
+            RefreshToken = GetRefreshToken()
+        };
+
+        var token = Token.From(response, user.Id);
+        if (!token.Expired()) await repo.CreateOrUpdate(token);
+
+        return response;
+    }
+
+    private string GenerateAccessToken(User user, DateTime expiry)
+    {
         var descriptor = BuildDescriptor(user.Username, expiry);
         var handler = new JwtSecurityTokenHandler();
         var accessToken = handler.CreateToken(descriptor);
 
-        var token = new Token
-        {
-            Id = user.Id,
-            Access = handler.WriteToken(accessToken),
-            Refresh = await GetRefreshToken(user.Id),
-            AccessExpiry = expiry
-        };
-
-        if (token.RefreshExpiry >= DateTime.UtcNow) await repo.CreateOrUpdate(token);
-
-        return token;
+        return handler.WriteToken(accessToken);
     }
 
     private SecurityTokenDescriptor BuildDescriptor(string username, DateTime expiry)
@@ -62,13 +64,11 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
         return new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
     }
 
-    private async Task<string> GetRefreshToken(int id)
+    private static string GetRefreshToken()
     {
-        var token = await repo.FindById(id);
-        if (token is not null && token.RefreshExpiry >= DateTime.UtcNow) return token.Refresh;
-
-        var randomBytes = new byte[32];
+        var randomBytes = new byte[64];
         RandomNumberGenerator.Fill(randomBytes);
+
         return Convert.ToBase64String(randomBytes);
     }
 }

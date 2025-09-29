@@ -47,7 +47,7 @@ public static class DependencyInjection
     {
         services.AddScoped<IAuth, Authenticator>();
         services.AddScoped<ITokenHandler, TokenHandler>();
-        services.AddScoped<ILoginService, LoginService>();
+        services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IBarcodeService, BarcodeFoodService>();
         services.AddScoped<IFreshFoodsService, FreshFoodService>();
     }

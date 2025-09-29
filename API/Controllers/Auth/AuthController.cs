@@ -3,11 +3,11 @@ using Core.Models.API.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Scale.io_API.Controllers.Login;
+namespace Scale.io_API.Controllers.Auth;
 
 [ApiController]
 [Route("[controller]")]
-public class LoginController(ILoginService service) : ControllerBase
+public class AuthController(IAuthService service) : ControllerBase
 {
     [AllowAnonymous]
     [HttpPost]
