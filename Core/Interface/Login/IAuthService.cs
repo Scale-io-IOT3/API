@@ -6,4 +6,5 @@ namespace Core.Interface.Login;
 public interface IAuthService : IService<LoginResponse, LoginRequest>
 {
     public Task<LoginResponse?> Authenticate(LoginRequest request);
+    public Task<RefreshResponse?> Refresh(RefreshRequest request);
 }

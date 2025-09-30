@@ -1,9 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Core.Models.API.Responses;
-using Core.Models.Entities;
 
-namespace Core.Models.API;
+namespace Core.Models.Entities;
 
 public class Token
 {
@@ -15,7 +14,7 @@ public class Token
 
     public bool Expired()
     {
-        return Expiry < DateTime.UtcNow;
+        return Expiry.CompareTo(DateTime.UtcNow) <= 0;
     }
 
     public static Token From(LoginResponse response, int id)

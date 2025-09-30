@@ -1,5 +1,5 @@
 using Core.Interface;
-using Core.Models.API;
+using Core.Models.Entities;
 using Infrastructure.Persistence.Contexts;
 using Infrastructure.Utils;
 using Microsoft.EntityFrameworkCore;
@@ -41,6 +41,16 @@ public class TokenRepository(AppDbContext context) : IRepo<Token>
         Map(t, existing);
         await Update(existing);
     }
+
+    public async Task<Token?> Find(string token)
+    {
+        var tokens = await context.Tokens
+            .Include(t => t.User)
+            .ToListAsync();
+
+        return tokens.FirstOrDefault(t => Cryptography.Verify(token, t.Refresh));
+    }
+
 
     private static Token HashToken(Token token)
     {

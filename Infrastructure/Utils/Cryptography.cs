@@ -13,7 +13,7 @@ public class Cryptography(IRepo<User> repo)
     public async Task<UserStatus> Authenticate(LoginRequest request)
     {
         var user = await repo.FindByUsername(request.Username);
-        var status = Verify(request.Password, user);
+        var status = Verify(request.Password, user: user);
 
         return new UserStatus(status, user);
     }
@@ -23,7 +23,7 @@ public class Cryptography(IRepo<User> repo)
         return Hasher.HashPassword(user, plaintext);
     }
 
-    private static bool Verify(string plaintext, User? user = null, string hash = "")
+    public static bool Verify(string plaintext, string hash = "", User? user = null)
     {
         var result = Hasher.VerifyHashedPassword(user, user?.PasswordHash ?? hash, plaintext);
         return result is PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded;

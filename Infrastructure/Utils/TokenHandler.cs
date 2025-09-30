@@ -21,6 +21,14 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
         return await Generate(user, expiry);
     }
 
+    public async Task<RefreshResponse?> Refresh(string token)
+    {
+        var t = await repo.Find(token);
+        if (t == null) return null;
+
+        return await Rotate(t);
+    }
+
     private async Task<LoginResponse> Generate(User user, DateTime expiry)
     {
         var response = new LoginResponse
@@ -70,5 +78,20 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
         RandomNumberGenerator.Fill(randomBytes);
 
         return Convert.ToBase64String(randomBytes);
+    }
+
+    private async Task<RefreshResponse> Rotate(Token token)
+    {
+        var expiry = DateTime.UtcNow.AddMinutes(_options.TokenValidityMins);
+        var response = new RefreshResponse
+        {
+            Refresh = GetRefreshToken(),
+            Access = GenerateAccessToken(token.User, expiry)
+        };
+
+        token.Refresh = response.Refresh;
+        await repo.CreateOrUpdate(token);
+
+        return response;
     }
 }

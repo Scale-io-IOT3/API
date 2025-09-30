@@ -25,4 +25,9 @@ public class AuthService(ITokenHandler tokenHandler, IRepo<User> repo) : IAuthSe
             Username = request.Username
         };
     }
+
+    public async Task<RefreshResponse?> Refresh(RefreshRequest request)
+    {
+        return await tokenHandler.Refresh(request.Token);
+    }
 }

@@ -24,6 +24,11 @@ public class UserRepository(AppDbContext context) : IRepo<User>
         return users.FirstOrDefault(u => u.Id == id);
     }
 
+    public Task<User?> Find(string entry)
+    {
+        throw new NotImplementedException();
+    }
+
     public async Task CreateOrUpdate(User user)
     {
         await context.Users.AddAsync(user);
