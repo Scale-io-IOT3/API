@@ -21,6 +21,6 @@ public class AuthController(IAuthService service) : ControllerBase
     public async Task<ActionResult> Refresh([FromBody] RefreshRequest request)
     {
         var res = await service.Refresh(request);
-        return res == null ? BadRequest("The token cannot be refreshed") : Ok(res);
+        return res == null ? BadRequest("The given token is not valid.") : Ok(res);
     }
 }

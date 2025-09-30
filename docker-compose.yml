@@ -29,3 +29,4 @@ services:
       - "5175:8080"
     environment:
       - DOTNET_RUNNING_IN_CONTAINER=true
+    restart: on-failure

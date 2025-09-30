@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Core.DTO.Auth;
 using Core.Interface;
 using Core.Models.API.Requests;
@@ -20,12 +21,20 @@ public class Cryptography(IRepo<User> repo)
 
     public static string Hash(string plaintext, User? user = null)
     {
-        return Hasher.HashPassword(user, plaintext);
+        return Hasher.HashPassword(user!, plaintext);
     }
 
     public static bool Verify(string plaintext, string hash = "", User? user = null)
     {
-        var result = Hasher.VerifyHashedPassword(user, user?.PasswordHash ?? hash, plaintext);
+        var result = Hasher.VerifyHashedPassword(user!, user?.PasswordHash ?? hash, plaintext);
         return result is PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded;
+    }
+
+    public static string GenerateToken()
+    {
+        var randomBytes = new byte[64];
+        RandomNumberGenerator.Fill(randomBytes);
+
+        return Convert.ToBase64String(randomBytes);
     }
 }

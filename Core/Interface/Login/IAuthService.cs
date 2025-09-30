@@ -3,8 +3,8 @@ using Core.Models.API.Responses;
 
 namespace Core.Interface.Login;
 
-public interface IAuthService : IService<LoginResponse, LoginRequest>
+public interface IAuthService : IService<TokenResponse, LoginRequest>
 {
-    public Task<LoginResponse?> Authenticate(LoginRequest request);
-    public Task<RefreshResponse?> Refresh(RefreshRequest request);
+    public Task<TokenResponse?> Authenticate(LoginRequest request);
+    public Task<TokenResponse?> Refresh(RefreshRequest request);
 }

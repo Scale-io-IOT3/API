@@ -5,6 +5,6 @@ namespace Core.Interface.Login;
 
 public interface ITokenHandler
 {
-    Task<LoginResponse> Create(User user);
-    Task<RefreshResponse?> Refresh(string token);
+    Task<TokenResponse> Create(User user);
+    Task<TokenResponse?> Refresh(string token);
 }

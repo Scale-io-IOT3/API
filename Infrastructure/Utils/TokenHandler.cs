@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using Core.Interface;
 using Core.Interface.Login;
 using Core.Models.API;
@@ -15,30 +14,23 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
 {
     private readonly JwtOptions _options = options.Value;
 
-    public async Task<LoginResponse> Create(User user)
+    public async Task<TokenResponse> Create(User user)
     {
         var expiry = DateTime.UtcNow.AddMinutes(_options.TokenValidityMins);
         return await Generate(user, expiry);
     }
 
-    public async Task<RefreshResponse?> Refresh(string token)
+    public async Task<TokenResponse?> Refresh(string token)
     {
         var t = await repo.Find(token);
-        if (t == null) return null;
-
-        return await Rotate(t);
+        return t is null || t.Expired() ? null : await Rotate(t);
     }
 
-    private async Task<LoginResponse> Generate(User user, DateTime expiry)
+    private async Task<TokenResponse> Generate(User user, DateTime expiry)
     {
-        var response = new LoginResponse
-        {
-            Username = user.Username,
-            AccessToken = GenerateAccessToken(user, expiry),
-            RefreshToken = GetRefreshToken()
-        };
-
+        var response = GenerateResponse(user, expiry);
         var token = Token.From(response, user.Id);
+
         if (!token.Expired()) await repo.CreateOrUpdate(token);
 
         return response;
@@ -57,7 +49,9 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
     {
         return new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity([new Claim(JwtRegisteredClaimNames.Name, username)]),
+            Subject = new ClaimsIdentity(
+                [new Claim(JwtRegisteredClaimNames.Name, username)]
+            ),
             Issuer = _options.Issuer,
             Audience = _options.Audience,
             Expires = expiry,
@@ -72,26 +66,23 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
         return new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
     }
 
-    private static string GetRefreshToken()
-    {
-        var randomBytes = new byte[64];
-        RandomNumberGenerator.Fill(randomBytes);
-
-        return Convert.ToBase64String(randomBytes);
-    }
-
-    private async Task<RefreshResponse> Rotate(Token token)
+    private async Task<TokenResponse> Rotate(Token token)
     {
         var expiry = DateTime.UtcNow.AddMinutes(_options.TokenValidityMins);
-        var response = new RefreshResponse
-        {
-            Refresh = GetRefreshToken(),
-            Access = GenerateAccessToken(token.User, expiry)
-        };
+        var response = GenerateResponse(token.User, expiry);
 
-        token.Refresh = response.Refresh;
+        token.Refresh = response.RefreshToken;
         await repo.CreateOrUpdate(token);
 
         return response;
+    }
+
+    private TokenResponse GenerateResponse(User user, DateTime expiry)
+    {
+        return new TokenResponse
+        {
+            RefreshToken = Cryptography.GenerateToken(),
+            AccessToken = GenerateAccessToken(user, expiry)
+        };
     }
 }

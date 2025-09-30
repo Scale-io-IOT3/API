@@ -17,7 +17,7 @@ public class Token
         return Expiry.CompareTo(DateTime.UtcNow) <= 0;
     }
 
-    public static Token From(LoginResponse response, int id)
+    public static Token From(TokenResponse response, int id)
     {
         return new Token
         {

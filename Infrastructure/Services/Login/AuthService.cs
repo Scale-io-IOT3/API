@@ -11,22 +11,21 @@ public class AuthService(ITokenHandler tokenHandler, IRepo<User> repo) : IAuthSe
 {
     private readonly Cryptography _cryptography = new(repo);
 
-    public async Task<LoginResponse?> Authenticate(LoginRequest request)
+    public async Task<TokenResponse?> Authenticate(LoginRequest request)
     {
         var status = await _cryptography.Authenticate(request);
         if (!status.Valid()) return null;
 
         var token = await tokenHandler.Create(status.User!);
 
-        return new LoginResponse
+        return new TokenResponse
         {
             AccessToken = token.AccessToken,
-            RefreshToken = token.RefreshToken,
-            Username = request.Username
+            RefreshToken = token.RefreshToken
         };
     }
 
-    public async Task<RefreshResponse?> Refresh(RefreshRequest request)
+    public async Task<TokenResponse?> Refresh(RefreshRequest request)
     {
         return await tokenHandler.Refresh(request.Token);
     }
