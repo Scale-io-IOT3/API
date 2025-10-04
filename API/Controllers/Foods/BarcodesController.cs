@@ -6,7 +6,8 @@ using Scale.io_API.Controllers.Foods.Abstract;
 namespace Scale.io_API.Controllers.Foods;
 
 [Authorize]
-public class BarcodesController(IBarcodeService service) : FoodsController<IBarcodeService>(service)
+public class BarcodesController(IBarcodeService service, ILogger<BarcodesController> logger)
+    : FoodsController<IBarcodeService>(service, logger)
 {
     protected override bool EmptyAsNotFound => true;
 

@@ -6,6 +6,7 @@ using Core.Interface.Login;
 using Core.Models.API;
 using Core.Models.Entities;
 using Infrastructure.Clients;
+using Infrastructure.Clients.Foods;
 using Infrastructure.Persistence.Contexts;
 using Infrastructure.Repositories;
 using Infrastructure.Services.Foods;

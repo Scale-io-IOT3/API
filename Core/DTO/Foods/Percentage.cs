@@ -25,6 +25,14 @@ public class Percentage
         var carbKcal = source.Carbohydrates * CalsPerGramCarb;
         var total = proteinKcal + fatKcal + carbKcal;
 
+        if (total == 0)
+            return new Percentage
+            {
+                ProteinsPct = 0,
+                FatPct = 0,
+                CarbsPct = 0
+            };
+
         return new Percentage
         {
             ProteinsPct = R(proteinKcal / total),

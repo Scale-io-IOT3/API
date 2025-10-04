@@ -7,9 +7,9 @@ namespace Scale.io_API.Controllers.Auth;
 
 [ApiController]
 [Route("[controller]")]
+[AllowAnonymous]
 public class AuthController(IAuthService service) : ControllerBase
 {
-    [AllowAnonymous]
     [HttpPost]
     public async Task<ActionResult> Authenticate(LoginRequest request)
     {
