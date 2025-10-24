@@ -78,8 +78,6 @@ public static class Configuration
 
     private static void DevConfig(this WebApplication app)
     {
-        if (!app.Environment.IsDevelopment()) return;
-
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

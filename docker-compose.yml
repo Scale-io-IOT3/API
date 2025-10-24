@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: API/Dockerfile
-      target: dev
+      target: final
     develop:
       watch:
         - path: ./API
