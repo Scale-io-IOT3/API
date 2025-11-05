@@ -14,7 +14,6 @@
 **/*.user
 **/*.userosscache
 **/*.sln.docstates
-**/**/.env
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 **/*.userprefs
@@ -79,11 +78,9 @@
 **/*_p.c
 **/*_h.h
 **/*.ilk
-**/*.meta
 **/*.obj
 **/*.iobj
 **/*.pch
-**/*.pdb
 **/*.ipdb
 **/*.pgc
 **/*.pgd
@@ -136,8 +133,6 @@
 # ReSharper is a .NET coding add-in
 **/_ReSharper*
 **/*.[Rr]e[Ss]harper
-**/*.DotSettings.user
-
 # TeamCity is a build add-in
 **/_TeamCity*
 

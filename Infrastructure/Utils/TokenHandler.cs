@@ -38,20 +38,24 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
 
     private string GenerateAccessToken(User user, DateTime expiry)
     {
-        var descriptor = BuildDescriptor(user.Username, expiry);
+        var descriptor = BuildDescriptor(user, expiry);
         var handler = new JwtSecurityTokenHandler();
         var accessToken = handler.CreateToken(descriptor);
 
         return handler.WriteToken(accessToken);
     }
 
-    private SecurityTokenDescriptor BuildDescriptor(string username, DateTime expiry)
+    private SecurityTokenDescriptor BuildDescriptor(User user, DateTime expiry)
     {
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Name, user.Username)
+        };
+
         return new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity(
-                [new Claim(JwtRegisteredClaimNames.Name, username)]
-            ),
+            Subject = new ClaimsIdentity(claims),
             Issuer = _options.Issuer,
             Audience = _options.Audience,
             Expires = expiry,

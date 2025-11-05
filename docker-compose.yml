@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: API/Dockerfile
-      target: final
+      target: dev
     develop:
       watch:
         - path: ./API
@@ -17,7 +17,7 @@ services:
           action: sync
           target: /app/Infrastructure
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:5175/health" ]
       interval: 1m30s
       timeout: 10s
       retries: 3

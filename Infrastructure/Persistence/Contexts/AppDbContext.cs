@@ -1,4 +1,3 @@
-using Core.Models.API;
 using Core.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;

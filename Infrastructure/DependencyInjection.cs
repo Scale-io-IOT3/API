@@ -1,4 +1,5 @@
-﻿using Core.DTO.Barcodes;
+﻿using System.IdentityModel.Tokens.Jwt;
+using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
 using Core.Interface;
 using Core.Interface.Foods;
@@ -29,6 +30,7 @@ public static class DependencyInjection
         services.AddMemoryCache();
         services.AddScoped();
         services.AddClients();
+        services.AddHealthChecks();
     }
 
     private static void AddClients(this IServiceCollection services)
@@ -81,7 +83,8 @@ public static class DependencyInjection
                 ValidateAudience = true,
                 ValidateIssuer = true,
                 ValidateLifetime = true,
-                ValidateIssuerSigningKey = true
+                ValidateIssuerSigningKey = true,
+                NameClaimType = JwtRegisteredClaimNames.Name
             };
         });
         services.AddAuthorization();

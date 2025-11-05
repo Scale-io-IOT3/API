@@ -22,6 +22,7 @@ public static class Configuration
         app.UseAuthorization();
         app.MapControllers();
         app.DevConfig();
+        app.MapHealthChecks("/health");
     }
 
     private static void MapDocumentation(this WebApplication app)
