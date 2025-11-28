@@ -4,6 +4,7 @@ using Core.DTO.FreshFoods;
 using Core.Interface;
 using Core.Interface.Foods;
 using Core.Interface.Login;
+using Core.Interface.Meals;
 using Core.Models.API;
 using Core.Models.Entities;
 using Infrastructure.Clients;
@@ -12,6 +13,7 @@ using Infrastructure.Persistence.Contexts;
 using Infrastructure.Repositories;
 using Infrastructure.Services.Foods;
 using Infrastructure.Services.Login;
+using Infrastructure.Services.Meals;
 using Infrastructure.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
@@ -53,11 +55,13 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IBarcodeService, BarcodeFoodService>();
         services.AddScoped<IFreshFoodsService, FreshFoodService>();
+        services.AddScoped<IMealsService, MealServie>();
     }
 
     private static void AddRepositories(this IServiceCollection services)
     {
         services.AddScoped<IRepo<User>, UserRepository>();
+        services.AddScoped<IRepo<Meal>, MealRepository>();
         services.AddScoped<IRepo<Token>, TokenRepository>();
     }
 

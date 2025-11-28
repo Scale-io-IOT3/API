@@ -1,4 +1,4 @@
-using Core.Interface;
+using Core.Interface.Meals;
 using Core.Models.API.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,15 +8,16 @@ namespace Scale.io_API.Controllers.Meals;
 [ApiController]
 [Authorize]
 [Route("[controller]")]
-public class MealsController : ControllerBase
+public class MealsController(IMealsService service) : ControllerBase
 {
     [HttpGet]
-    public async Task<OkObjectResult> Create(MealCreationRequest request)
+    public async Task<ActionResult> Create(MealCreationRequest request)
     {
-        var user = User.Identity?.Name;
+        var username = User.Identity?.Name;
+        if (username is null) return Unauthorized();
 
-        return await Task.FromResult(
-            Ok(new { user })
-        );
+        var res = await service.RegisterAsync(request, username);
+
+        return Ok(res);
     }
 }
