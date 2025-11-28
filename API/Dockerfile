@@ -1,7 +1,7 @@
 ﻿# ------------------------------
 # Base runtime (prod)
 # ------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:latest AS base
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 WORKDIR /app
 EXPOSE 8080
 
@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y sqlite3 libsqlite3-dev \
 # ------------------------------
 # Build stage
 # ------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:latest AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
 COPY API/API.csproj API/
@@ -33,7 +33,7 @@ ENTRYPOINT ["dotnet", "API.dll"]
 # ------------------------------
 # Dev runtime (SDK + watch)
 # ------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:latest AS dev
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dev
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y sqlite3 libsqlite3-dev \
