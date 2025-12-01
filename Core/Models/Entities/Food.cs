@@ -6,10 +6,8 @@ namespace Core.Models.Entities;
 public class Food
 {
     [Key] public required string Id { get; init; }
-
     public int MealId { get; init; }
-
-    [ForeignKey(nameof(MealId))] public required Meal Meal { get; set; }
+    [ForeignKey(nameof(MealId))] public Meal? Meal { get; set; }
 
     public double Quantity { get; set; }
     public int? Calories { get; set; }
