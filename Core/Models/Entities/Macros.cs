@@ -7,7 +7,7 @@ namespace Core.Models.Entities;
 public class Macros
 {
     [Key] public int Id { get; init; }
-    public required string FoodId { get; set; }
+    public string? FoodId { get; set; }
 
     [JsonIgnore]
     [ForeignKey(nameof(FoodId))]
