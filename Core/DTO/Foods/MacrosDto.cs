@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Core.Interface.Foods;
+using Core.Models.Entities;
 
 namespace Core.DTO.Foods;
 
@@ -39,6 +40,69 @@ public class MacrosDto : IMacroSource
             Carbohydrates = R(source.Carbohydrates),
             Fat = R(source.Fat),
             Proteins = R(source.Proteins)
+        };
+    }
+
+    public List<Macros> ToEntityMacros(string foodId)
+    {
+        return
+        [
+            new Macros
+            {
+                FoodId = foodId,
+                MacroTypeId = 1,
+                Amount = Carbohydrates,
+                Percentage = Percentages.CarbsPct
+            },
+
+            new Macros
+            {
+                FoodId = foodId,
+                MacroTypeId = 2,
+                Amount = Fat,
+                Percentage = Percentages.FatPct
+            },
+
+            new Macros
+            {
+                FoodId = foodId,
+                MacroTypeId = 3,
+                Amount = Proteins,
+                Percentage = Percentages.ProteinsPct
+            }
+        ];
+    }
+
+    public static MacrosDto From(ICollection<Macros> macros)
+    {
+        double carbs = 0;
+        double fat = 0;
+        double proteins = 0;
+
+        foreach (var m in macros)
+            switch (m.MacroTypeId)
+            {
+                case 1:
+                    carbs = m.Amount;
+                    break;
+
+                case 2:
+                    fat = m.Amount;
+                    break;
+
+                case 3:
+                    proteins = m.Amount;
+                    break;
+            }
+
+        var kcal = carbs * 4 + fat * 9 + proteins * 4;
+
+        return new MacrosDto
+        {
+            Carbohydrates = carbs,
+            Fat = fat,
+            Proteins = proteins,
+            E = kcal
         };
     }
 }

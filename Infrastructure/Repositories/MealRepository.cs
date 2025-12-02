@@ -9,8 +9,12 @@ public class MealRepository(AppDbContext context) : IRepo<Meal>
 {
     public async Task<List<Meal>> GetAll()
     {
-        return await context.Meals.ToListAsync();
+        return await context.Meals
+            .Include(m => m.Foods)
+            .ThenInclude(f => f.Macros)
+            .ToListAsync();
     }
+
 
     public Task<Meal?> FindByUsername(string username)
     {
