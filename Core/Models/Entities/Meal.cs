@@ -11,7 +11,7 @@ public class Meal
 
     [ForeignKey(nameof(UserId))] public required User User { get; init; }
 
-    public string CreatedAt { get; init; } = DateTime.UtcNow.ToString("yyyy-MM-dd");
+    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     public ICollection<Food> Foods { get; set; } = [];
 

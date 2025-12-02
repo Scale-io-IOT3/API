@@ -6,7 +6,7 @@ public record MealDto
 {
     public MealDto(Meal meal)
     {
-        CreatedAt = meal.CreatedAt;
+        CreatedAt = meal.CreatedAt.ToString("yyyy-MM-dd");
         Foods = meal.Foods;
     }
 
