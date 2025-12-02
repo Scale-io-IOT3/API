@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
-using Core.Models.Entities;
+using Core.DTO;
 
 namespace Core.Models.API.Responses;
 
 public class MealCreationResponse : Response
 {
-    [Required] public required Meal Meal { get; init; }
+    [Required] public required MealDto Meal { get; init; }
 }

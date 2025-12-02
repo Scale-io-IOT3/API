@@ -14,7 +14,7 @@ public class MealServie(IRepo<User> users, IRepo<Meal> meals) : IMealsService
         var meal = new Meal { Foods = request.Foods, User = user };
 
         await meals.CreateOrUpdate(meal);
-        return new MealCreationResponse { Meal = meal };
+        return new MealCreationResponse { Meal = meal.ToDto() };
     }
 
     public async Task<List<Meal>> GetMeals(string username)

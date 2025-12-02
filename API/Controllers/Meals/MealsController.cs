@@ -26,7 +26,7 @@ public class MealsController(IMealsService service) : ControllerBase
         var username = User.Identity?.Name;
         if (username is null) return Unauthorized();
 
-        var res = await service.GetMeals(username);
+        var res = (await service.GetMeals(username)).Select(m => m.ToDto()).ToList();
         return Ok(res);
     }
 }
