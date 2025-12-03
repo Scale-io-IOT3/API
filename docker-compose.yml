@@ -1,0 +1,32 @@
+services:
+  scale.io:
+    container_name: api
+    build:
+      context: .
+      dockerfile: API/Dockerfile
+      target: dev
+    develop:
+      watch:
+        - path: ./API
+          action: sync
+          target: /app/API
+        - path: ./Core
+          action: sync
+          target: /app/Core
+        - path: ./Infrastructure
+          action: sync
+          target: /app/Infrastructure
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5175/health" ]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      start_interval: 5s
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "5175:8080"
+    environment:
+      - DOTNET_RUNNING_IN_CONTAINER=true
+    restart: on-failure

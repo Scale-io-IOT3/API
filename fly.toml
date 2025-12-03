@@ -1,0 +1,42 @@
+# fly.toml app configuration file generated for scale-io-api on 2025-10-24T17:04:16-04:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'scale-io-api'
+primary_region = 'yyz'
+
+[build]
+  dockerfile = 'API/Dockerfile'
+  ignorefile = '.dockerignore'
+  build-target = 'final'
+
+[deploy]
+  # release_command = 'dotnet ef database update --project app/Infrastructure/ --startup-project app/API/'
+
+[env]
+  ASPNETCORE_ENVIRONMENT = 'Production'
+  COMPOSE_FILE = 'docker-compose.yml'
+  COMPOSE_PROJECT_NAME = 'scaleio'
+  Jwt__Audience = 'https://scale-io-api.fly.dev'
+  Jwt__Issuer = 'https://scale-io-api.fly.dev'
+  Jwt__TokenValidityMins = '60'
+  Logging__LogLevel__Default = 'Information'
+  Logging__LogLevel__Microsoft__AspNetCore = 'Warning'
+  SOURCE = 'Data Source=/app/data/app.db'
+
+[[mounts]]
+  source = 'db'
+  destination = '/app/data'
+
+[http_service]
+  internal_port = 8080
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
