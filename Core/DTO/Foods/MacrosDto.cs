@@ -10,7 +10,7 @@ public class MacrosDto : IMacroSource
     public double E { private get; init; }
 
     [JsonPropertyName("percentages")] public Percentage Percentages => Percentage.From(this);
-    [JsonIgnore] public int Calories => (int)Math.Round(E);
+    [JsonPropertyName("calories")] public int Calories => (int)Math.Round(E);
     [JsonPropertyName("carbohydrates")] public double Carbohydrates { get; init; }
     [JsonPropertyName("fat")] public double Fat { get; init; }
     [JsonPropertyName("proteins")] public double Proteins { get; init; }
