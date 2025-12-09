@@ -73,7 +73,7 @@ public class MacrosDto : IMacroSource
         ];
     }
 
-    public static MacrosDto From(ICollection<Macros> macros)
+    public static MacrosDto From(ICollection<Macros> macros, int? calories)
     {
         double carbs = 0;
         double fat = 0;
@@ -95,7 +95,7 @@ public class MacrosDto : IMacroSource
                     break;
             }
 
-        var kcal = carbs * 4 + fat * 9 + proteins * 4;
+        var kcal = calories ?? carbs * 4 + fat * 9 + proteins *4;
 
         return new MacrosDto
         {

@@ -26,7 +26,7 @@ public class Food
     {
         return new FoodDto
         {
-            HiddenMacrosDto = MacrosDto.From(Macros),
+            HiddenMacrosDto = MacrosDto.From(Macros, Calories),
             HiddenName = Name ?? "",
             Brands = Brands ?? "",
             Quantity = Quantity
