@@ -7,7 +7,7 @@ public record MealDto
 {
     public MealDto(Meal meal)
     {
-        CreatedAt = meal.CreatedAt.ToString("yyyy-MM-dd");
+        CreatedAt = meal.CreatedAt.ToUniversalTime().ToString("o");
         Foods = meal.Foods.Select(f => f.ToDto()).ToList();
     }
 
