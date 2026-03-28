@@ -17,7 +17,7 @@ public class MealsController(IMealsService service) : ControllerBase
         if (username is null) return Unauthorized();
 
         var res = await service.RegisterAsync(request, username);
-        return res is not null ? Ok(res) : BadRequest();
+        return res is not null ? Ok(res) : Unauthorized();
     }
 
     [HttpGet]

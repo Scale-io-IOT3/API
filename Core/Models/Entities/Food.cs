@@ -7,7 +7,7 @@ namespace Core.Models.Entities;
 
 public class Food
 {
-    [Key] public string Id { get; set; } = Guid.NewGuid().ToString();
+    [Key] public int Id { get; init; }
 
     public int MealId { get; init; }
 
@@ -17,18 +17,19 @@ public class Food
 
     public double Quantity { get; set; }
     public int? Calories { get; set; }
-    public string? Name { get; set; }
-    public string? Brands { get; set; }
-
-    public ICollection<Macros> Macros { get; set; } = [];
+    public string Name { get; set; } = "";
+    public string Brands { get; set; } = "";
+    public double Carbohydrates { get; set; }
+    public double Fat { get; set; }
+    public double Proteins { get; set; }
 
     public FoodDto ToDto()
     {
         return new FoodDto
         {
-            HiddenMacrosDto = MacrosDto.From(Macros, Calories),
-            HiddenName = Name ?? "",
-            Brands = Brands ?? "",
+            HiddenMacrosDto = MacrosDto.From(Carbohydrates, Fat, Proteins, Calories),
+            HiddenName = Name,
+            Brands = Brands,
             Quantity = Quantity
         };
     }

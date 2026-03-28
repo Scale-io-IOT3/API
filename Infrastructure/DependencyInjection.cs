@@ -1,4 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Security.Cryptography;
 using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
 using Core.Interface;
@@ -16,9 +18,12 @@ using Infrastructure.Services.Login;
 using Infrastructure.Services.Meals;
 using Infrastructure.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Polly;
+using Polly.Extensions.Http;
 using TokenHandler = Infrastructure.Utils.TokenHandler;
 
 namespace Infrastructure;
@@ -30,20 +35,23 @@ public static class DependencyInjection
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.AddAuthentication(configuration);
         services.AddMemoryCache();
-        services.AddScoped();
+        services.AddPersistence(configuration);
         services.AddClients();
         services.AddHealthChecks();
     }
 
     private static void AddClients(this IServiceCollection services)
     {
-        services.AddHttpClient<IClient<BarcodeResponse>, BarcodeClient>();
-        services.AddHttpClient<IClient<FreshFoodResponse>, FreshFoodsClient>();
+        services.AddHttpClient<IClient<BarcodeResponse>, BarcodeClient>(ConfigureHttpClient)
+            .AddPolicyHandler(GetRetryPolicy());
+        services.AddHttpClient<IClient<FreshFoodResponse>, FreshFoodsClient>(ConfigureHttpClient)
+            .AddPolicyHandler(GetRetryPolicy());
     }
 
-    private static void AddScoped(this IServiceCollection services)
+    private static void AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddScoped<AppDbContext>();
+        var source = ResolveConnectionString(configuration);
+        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(source));
         services.AddRepositories();
         services.AddServices();
     }
@@ -61,7 +69,8 @@ public static class DependencyInjection
     private static void AddRepositories(this IServiceCollection services)
     {
         services.AddScoped<IRepo<User>, UserRepository>();
-        services.AddScoped<IRepo<Meal>, MealRepository>();
+        services.AddScoped<MealRepository>();
+        services.AddScoped<IRepo<Meal>>(provider => provider.GetRequiredService<MealRepository>());
         services.AddScoped<IRepo<Token>, TokenRepository>();
     }
 
@@ -69,6 +78,8 @@ public static class DependencyInjection
     {
         var jwtSection = configuration.GetSection("Jwt");
         var jwtOptions = jwtSection.Get<JwtOptions>()!;
+        var signingKey = ResolveSigningKey(jwtOptions, configuration);
+
         services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -81,9 +92,7 @@ public static class DependencyInjection
             {
                 ValidIssuer = jwtOptions.Issuer,
                 ValidAudience = jwtOptions.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(
-                    Convert.FromBase64String(jwtOptions.Key)
-                ),
+                IssuerSigningKey = new SymmetricSecurityKey(signingKey),
                 ValidateAudience = true,
                 ValidateIssuer = true,
                 ValidateLifetime = true,
@@ -92,5 +101,64 @@ public static class DependencyInjection
             };
         });
         services.AddAuthorization();
+    }
+
+    private static void ConfigureHttpClient(HttpClient client)
+    {
+        client.Timeout = TimeSpan.FromSeconds(15);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Scale.io_API/1.0");
+    }
+
+    private static AsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+    {
+        return HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .OrResult(message => message.StatusCode == HttpStatusCode.TooManyRequests)
+            .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt)));
+    }
+
+    private static string ResolveConnectionString(IConfiguration configuration)
+    {
+        var source = configuration["DATABASE_URL"] ?? configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            throw new InvalidOperationException(
+                "Database connection string was not configured. Set SOURCE or ConnectionStrings:DefaultConnection."
+            );
+        }
+
+        if (source.Contains("Data Source=", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "SQLite connection string detected in SOURCE. Set SOURCE to a PostgreSQL connection string (e.g. Host=postgres;Port=5432;Database=scaleio;Username=postgres;Password=postgres)."
+            );
+        }
+
+        return source;
+    }
+
+    private static byte[] ResolveSigningKey(JwtOptions options, IConfiguration configuration)
+    {
+        if (!string.IsNullOrWhiteSpace(options.Key))
+        {
+            try
+            {
+                var decoded = Convert.FromBase64String(options.Key);
+                if (decoded.Length >= 32) return decoded;
+            }
+            catch (FormatException)
+            {
+                // Continue to fallback behavior.
+            }
+        }
+
+        var isDev = string.Equals(
+            configuration["ASPNETCORE_ENVIRONMENT"],
+            "Development",
+            StringComparison.OrdinalIgnoreCase
+        );
+
+        if (isDev) return RandomNumberGenerator.GetBytes(64);
+        throw new InvalidOperationException("Jwt:Key must be set to a base64-encoded key with at least 32 bytes.");
     }
 }

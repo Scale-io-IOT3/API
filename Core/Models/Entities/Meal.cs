@@ -9,7 +9,7 @@ public class Meal
     [Key] public int Id { get; init; }
     public int UserId { get; init; }
 
-    [ForeignKey(nameof(UserId))] public required User User { get; init; }
+    [ForeignKey(nameof(UserId))] public required User User { get; set; }
 
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 

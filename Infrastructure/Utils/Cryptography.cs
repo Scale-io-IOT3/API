@@ -37,4 +37,11 @@ public class Cryptography(IRepo<User> repo)
 
         return Convert.ToBase64String(randomBytes);
     }
+
+    public static string FingerprintToken(string plaintext)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(plaintext);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
+    }
 }

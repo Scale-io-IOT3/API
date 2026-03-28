@@ -9,24 +9,24 @@ public class UserRepository(AppDbContext context) : IRepo<User>
 {
     public async Task<List<User>> GetAll()
     {
-        return await context.Users.ToListAsync();
+        return await context.Users
+            .AsNoTracking()
+            .ToListAsync();
     }
 
     public async Task<User?> FindByUsername(string username)
     {
-        var users = await GetAll();
-        return users.FirstOrDefault(u => u.Username == username);
+        return await context.Users.FirstOrDefaultAsync(u => u.Username == username);
     }
 
     public async Task<User?> FindById(int id)
     {
-        var users = await GetAll();
-        return users.FirstOrDefault(u => u.Id == id);
+        return await context.Users.FirstOrDefaultAsync(u => u.Id == id);
     }
 
     public Task<User?> Find(string entry)
     {
-        throw new NotImplementedException();
+        return int.TryParse(entry, out var id) ? FindById(id) : FindByUsername(entry);
     }
 
     public async Task CreateOrUpdate(User user)

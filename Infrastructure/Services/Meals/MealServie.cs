@@ -4,18 +4,21 @@ using Core.Interface.Meals;
 using Core.Models.API.Requests;
 using Core.Models.API.Responses;
 using Core.Models.Entities;
+using Infrastructure.Repositories;
 
 namespace Infrastructure.Services.Meals;
 
-public class MealServie(IRepo<User> users, IRepo<Meal> meals) : IMealsService
+public class MealServie(IRepo<User> users, MealRepository meals) : IMealsService
 {
     public async Task<MealCreationResponse?> RegisterAsync(MealCreationRequest request, string username)
     {
         var user = await GetUser(username);
+        if (user is null) return null;
+
         var meal = new Meal
         {
             User = user,
-            Foods = request.Foods.Select(f => f.ToFood()).ToList()
+            Foods = [.. request.Foods.Select(f => f.ToFood())]
         };
 
         await meals.CreateOrUpdate(meal);
@@ -25,13 +28,14 @@ public class MealServie(IRepo<User> users, IRepo<Meal> meals) : IMealsService
     public async Task<List<MealDto>> GetMeals(string username)
     {
         var user = await GetUser(username);
-        var list = await meals.GetAll();
+        if (user is null) return [];
 
-        return list.FindAll(meal => meal.UserId == user.Id).Select(m => m.ToDto()).ToList();
+        var list = await meals.GetByUserId(user.Id);
+        return [.. list.Select(m => m.ToDto())];
     }
 
-    private async Task<User> GetUser(string username)
+    private async Task<User?> GetUser(string username)
     {
-        return (await users.FindByUsername(username))!;
+        return await users.FindByUsername(username);
     }
 }

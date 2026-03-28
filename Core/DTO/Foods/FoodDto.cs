@@ -44,16 +44,17 @@ public class FoodDto
 
     public Food ToFood()
     {
-        var id = Guid.NewGuid().ToString();
+        var macros = HiddenMacrosDto;
 
         return new Food
         {
-            Id = id,
             Name = Name,
             Brands = Brands,
             Calories = Calories,
             Quantity = Quantity,
-            Macros = HiddenMacrosDto.ToEntityMacros(id)
+            Carbohydrates = macros.Carbohydrates,
+            Fat = macros.Fat,
+            Proteins = macros.Proteins
         };
     }
 }
