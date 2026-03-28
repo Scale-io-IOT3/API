@@ -10,26 +10,50 @@ public class MealRepository(AppDbContext context) : IRepo<Meal>
     public async Task<List<Meal>> GetAll()
     {
         return await context.Meals
+            .AsNoTracking()
             .Include(m => m.Foods)
-            .ThenInclude(f => f.Macros)
             .ToListAsync();
     }
 
+    public async Task<List<Meal>> GetByUsername(string username)
+    {
+        return await context.Meals
+            .AsNoTracking()
+            .Include(m => m.Foods)
+            .Where(m => m.User.Username == username)
+            .ToListAsync();
+    }
+
+    public async Task<List<Meal>> GetByUserId(int userId)
+    {
+        return await context.Meals
+            .AsNoTracking()
+            .Include(m => m.Foods)
+            .Where(m => m.UserId == userId)
+            .ToListAsync();
+    }
 
     public Task<Meal?> FindByUsername(string username)
     {
-        throw new NotImplementedException();
+        return context.Meals
+            .AsNoTracking()
+            .Include(m => m.Foods)
+            .Where(m => m.User.Username == username)
+            .OrderByDescending(m => m.CreatedAt)
+            .FirstOrDefaultAsync();
     }
 
     public async Task<Meal?> FindById(int id)
     {
-        var meals = await GetAll();
-        return meals.FirstOrDefault(m => m.Id == id);
+        return await context.Meals
+            .AsNoTracking()
+            .Include(m => m.Foods)
+            .FirstOrDefaultAsync(m => m.Id == id);
     }
 
     public Task<Meal?> Find(string entry)
     {
-        throw new NotImplementedException();
+        return int.TryParse(entry, out var id) ? FindById(id) : FindByUsername(entry);
     }
 
     public async Task CreateOrUpdate(Meal entity)

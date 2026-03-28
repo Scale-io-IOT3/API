@@ -30,6 +30,7 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
     {
         var response = GenerateResponse(user, expiry);
         var token = Token.From(response, user.Id);
+        token.ExpiresAt = DateTime.UtcNow.AddDays(30);
 
         if (!token.Expired()) await repo.CreateOrUpdate(token);
 
@@ -75,7 +76,9 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
         var expiry = DateTime.UtcNow.AddMinutes(_options.TokenValidityMins);
         var response = GenerateResponse(token.User, expiry);
 
-        token.Refresh = response.RefreshToken;
+        token.TokenHash = response.RefreshToken;
+        token.TokenFingerprint = response.RefreshToken;
+        token.ExpiresAt = DateTime.UtcNow.AddDays(30);
         await repo.CreateOrUpdate(token);
 
         return response;

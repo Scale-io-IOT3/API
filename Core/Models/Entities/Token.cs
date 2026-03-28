@@ -6,23 +6,27 @@ namespace Core.Models.Entities;
 
 public class Token
 {
-    [Key] public int Id { get; set; }
+    [Key] public int Id { get; init; }
+    public int UserId { get; init; }
 
-    [ForeignKey(nameof(Id))] public User User { get; set; } = null!;
-    [Required] public string Refresh { get; set; } = "";
-    public DateTime Expiry { get; set; } = DateTime.UtcNow.AddDays(30);
+    [ForeignKey(nameof(UserId))] public User User { get; set; } = null!;
+    [Required] public string TokenHash { get; set; } = "";
+    [Required] public string TokenFingerprint { get; set; } = "";
+    public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddDays(30);
+    public DateTime? RevokedAt { get; set; }
 
     public bool Expired()
     {
-        return Expiry.CompareTo(DateTime.UtcNow) <= 0;
+        return RevokedAt is not null || ExpiresAt.CompareTo(DateTime.UtcNow) <= 0;
     }
 
-    public static Token From(TokenResponse response, int id)
+    public static Token From(TokenResponse response, int userId)
     {
         return new Token
         {
-            Id = id,
-            Refresh = response.RefreshToken
+            UserId = userId,
+            TokenHash = response.RefreshToken,
+            TokenFingerprint = response.RefreshToken
         };
     }
 }

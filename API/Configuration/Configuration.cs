@@ -21,7 +21,7 @@ public static class Configuration
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();
-        app.DevConfig();
+        app.ConfigureStartupExperience();
         app.MapHealthChecks("/health");
     }
 
@@ -73,18 +73,37 @@ public static class Configuration
 
     private static void EnvironmentConfig(this WebApplicationBuilder webApplicationBuilder)
     {
-        Env.Load();
+        if (webApplicationBuilder.Environment.IsDevelopment())
+        {
+            Env.Load();
+        }
+
         webApplicationBuilder.Configuration.AddEnvironmentVariables();
     }
 
-    private static void DevConfig(this WebApplication app)
+    private static void ConfigureStartupExperience(this WebApplication app)
     {
-        using (var scope = app.Services.CreateScope())
+        if (ShouldApplyMigrations(app))
         {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            db.Database.Migrate();
+            ApplyMigrations(app);
         }
 
-        app.MapDocumentation();
+        if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableApiDocs"))
+        {
+            app.MapDocumentation();
+        }
+    }
+
+    private static bool ShouldApplyMigrations(WebApplication app)
+    {
+        var configured = app.Configuration.GetValue<bool?>("ApplyMigrationsOnStartup");
+        return configured ?? app.Environment.IsDevelopment();
+    }
+
+    private static void ApplyMigrations(WebApplication app)
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Database.Migrate();
     }
 }

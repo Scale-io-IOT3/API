@@ -5,9 +5,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 WORKDIR /app
 EXPOSE 8080
 
-RUN apt-get update && apt-get install -y sqlite3 libsqlite3-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 # ------------------------------
 # Build stage
 # ------------------------------
@@ -35,9 +32,6 @@ ENTRYPOINT ["dotnet", "API.dll"]
 # ------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dev
 WORKDIR /app
-
-RUN apt-get update && apt-get install -y sqlite3 libsqlite3-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 ENTRYPOINT ["dotnet", "watch", "run", "--project", "API/API.csproj", "--urls", "http://0.0.0.0:8080"]

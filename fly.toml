@@ -11,29 +11,19 @@ primary_region = 'yyz'
   ignorefile = '.dockerignore'
   build-target = 'final'
 
-[deploy]
-  # release_command = 'dotnet ef database update --project app/Infrastructure/ --startup-project app/API/'
-
 [env]
   ASPNETCORE_ENVIRONMENT = 'Production'
-  COMPOSE_FILE = 'docker-compose.yml'
-  COMPOSE_PROJECT_NAME = 'scaleio'
   Jwt__Audience = 'https://scale-io-api.fly.dev'
   Jwt__Issuer = 'https://scale-io-api.fly.dev'
   Jwt__TokenValidityMins = '60'
   Logging__LogLevel__Default = 'Information'
   Logging__LogLevel__Microsoft__AspNetCore = 'Warning'
-  SOURCE = 'Data Source=/app/data/app.db'
 
-[[mounts]]
-  source = 'db'
-  destination = '/app/data'
 
 [http_service]
   internal_port = 8080
-  auto_stop_machines = 'off'
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
   processes = ['app']
 
 [[vm]]

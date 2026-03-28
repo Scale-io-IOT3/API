@@ -10,27 +10,38 @@ public class TokenRepository(AppDbContext context) : IRepo<Token>
 {
     public async Task<List<Token>> GetAll()
     {
-        return await context.Tokens.ToListAsync();
+        return await context.Tokens
+            .AsNoTracking()
+            .Include(t => t.User)
+            .ToListAsync();
     }
 
     public async Task<Token?> FindById(int id)
     {
-        return await context.Tokens.FirstOrDefaultAsync(t => t.Id == id);
+        return await context.Tokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.Id == id);
     }
 
     public async Task<Token?> FindByUsername(string username)
     {
         return await context.Tokens
             .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.User.Username == username);
+            .Where(t => t.User.Username == username)
+            .OrderByDescending(t => t.ExpiresAt)
+            .FirstOrDefaultAsync();
     }
 
     public async Task CreateOrUpdate(Token token)
     {
-        var existing = await context.Tokens
-            .FirstOrDefaultAsync(t => t.Id == token.Id);
-
         var t = HashToken(token);
+        if (token.Id == 0)
+        {
+            await Create(t);
+            return;
+        }
+
+        var existing = await context.Tokens.FirstOrDefaultAsync(existingToken => existingToken.Id == token.Id);
 
         if (existing is null)
         {
@@ -44,11 +55,16 @@ public class TokenRepository(AppDbContext context) : IRepo<Token>
 
     public async Task<Token?> Find(string token)
     {
-        var tokens = await context.Tokens
+        var fingerprint = Cryptography.FingerprintToken(token);
+        var stored = await context.Tokens.AsNoTracking()
             .Include(t => t.User)
-            .ToListAsync();
+            .FirstOrDefaultAsync(t =>
+                t.TokenFingerprint == fingerprint &&
+                t.RevokedAt == null &&
+                t.ExpiresAt > DateTime.UtcNow
+            );
 
-        return tokens.FirstOrDefault(t => Cryptography.Verify(token, t.Refresh));
+        return stored is null ? null : Cryptography.Verify(token, stored.TokenHash) ? stored : null;
     }
 
 
@@ -57,16 +73,20 @@ public class TokenRepository(AppDbContext context) : IRepo<Token>
         return new Token
         {
             Id = token.Id,
-            Expiry = token.Expiry,
-            Refresh = Cryptography.Hash(token.Refresh, token.User),
-            User = token.User
+            UserId = token.UserId,
+            ExpiresAt = token.ExpiresAt,
+            RevokedAt = token.RevokedAt,
+            TokenHash = Cryptography.Hash(token.TokenHash),
+            TokenFingerprint = Cryptography.FingerprintToken(token.TokenFingerprint)
         };
     }
 
     private static void Map(Token newToken, Token old)
     {
-        old.Refresh = newToken.Refresh;
-        old.Expiry = newToken.Expiry;
+        old.TokenHash = newToken.TokenHash;
+        old.TokenFingerprint = newToken.TokenFingerprint;
+        old.ExpiresAt = newToken.ExpiresAt;
+        old.RevokedAt = newToken.RevokedAt;
     }
 
     private async Task Update(Token token)

@@ -11,7 +11,7 @@ public class FoodDto
     [JsonPropertyName("nutriments")] public required MacrosDto HiddenMacrosDto { private get; set; }
     [JsonPropertyName("name")] public string Name => HiddenName;
     [JsonPropertyName("brands")] public required string Brands { get; set; } = "";
-    [JsonPropertyName("calories")] public int Calories => MacrosDto.Calories;
+    [JsonIgnore] public int Calories => MacrosDto.Calories;
     [JsonPropertyName("quantity")] public double Quantity { get; set; }
     [JsonPropertyName("macros")] public MacrosDto MacrosDto => HiddenMacrosDto;
 
@@ -44,16 +44,17 @@ public class FoodDto
 
     public Food ToFood()
     {
-        var id = Guid.NewGuid().ToString();
+        var macros = HiddenMacrosDto;
 
         return new Food
         {
-            Id = id,
             Name = Name,
             Brands = Brands,
             Calories = Calories,
             Quantity = Quantity,
-            Macros = HiddenMacrosDto.ToEntityMacros(id)
+            Carbohydrates = macros.Carbohydrates,
+            Fat = macros.Fat,
+            Proteins = macros.Proteins
         };
     }
 }

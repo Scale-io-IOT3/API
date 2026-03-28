@@ -17,7 +17,10 @@ public abstract class CachedService(IMemoryCache cache) : FoodsService
         if (cache.TryGetValue(key, out FoodResponse? cached)) return cached;
 
         var response = await base.FetchAsync(input, grams);
-        cache.Set(key, response, _options);
+        if (response is not null)
+        {
+            cache.Set(key, response, _options);
+        }
 
         return response;
     }
