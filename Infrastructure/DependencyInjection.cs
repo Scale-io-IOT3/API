@@ -33,7 +33,12 @@ public static class DependencyInjection
     public static void AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
-        services.AddAuthentication(configuration);
+        var jwtOptions = configuration.GetSection("Jwt").Get<JwtOptions>()!;
+        var signingKeyBytes = ResolveSigningKey(jwtOptions, configuration);
+        var signingKey = new SymmetricSecurityKey(signingKeyBytes);
+
+        services.AddSingleton(signingKey);
+        services.AddAuthentication(configuration, signingKey);
         services.AddMemoryCache();
         services.AddPersistence(configuration);
         services.AddClients();
@@ -74,11 +79,14 @@ public static class DependencyInjection
         services.AddScoped<IRepo<Token>, TokenRepository>();
     }
 
-    private static void AddAuthentication(this IServiceCollection services, IConfiguration configuration)
+    private static void AddAuthentication(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        SymmetricSecurityKey signingKey
+    )
     {
         var jwtSection = configuration.GetSection("Jwt");
         var jwtOptions = jwtSection.Get<JwtOptions>()!;
-        var signingKey = ResolveSigningKey(jwtOptions, configuration);
 
         services.AddAuthentication(options =>
         {
@@ -92,7 +100,7 @@ public static class DependencyInjection
             {
                 ValidIssuer = jwtOptions.Issuer,
                 ValidAudience = jwtOptions.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(signingKey),
+                IssuerSigningKey = signingKey,
                 ValidateAudience = true,
                 ValidateIssuer = true,
                 ValidateLifetime = true,

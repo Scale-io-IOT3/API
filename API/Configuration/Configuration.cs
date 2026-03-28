@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
 using Core;
+using Core.Models.Entities;
 using DotNetEnv;
 using Infrastructure;
 using Infrastructure.Persistence.Contexts;
@@ -10,11 +11,15 @@ using Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption;
 using Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ConfigurationModel;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using Infrastructure.Utils;
 
 namespace Scale.io_API.Configuration;
 
 public static class Configuration
 {
+    private const string DefaultUsername = "Monke";
+    private const string DefaultPassword = "1234567890Abc!";
+
     public static void Configure(this WebApplication app)
     {
         app.UseHttpsRedirection();
@@ -73,25 +78,15 @@ public static class Configuration
 
     private static void EnvironmentConfig(this WebApplicationBuilder webApplicationBuilder)
     {
-        if (webApplicationBuilder.Environment.IsDevelopment())
-        {
-            Env.Load();
-        }
-
+        if (webApplicationBuilder.Environment.IsDevelopment()) Env.Load();
         webApplicationBuilder.Configuration.AddEnvironmentVariables();
     }
 
     private static void ConfigureStartupExperience(this WebApplication app)
     {
-        if (ShouldApplyMigrations(app))
-        {
-            ApplyMigrations(app);
-        }
-
-        if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableApiDocs"))
-        {
-            app.MapDocumentation();
-        }
+        if (ShouldApplyMigrations(app)) ApplyMigrations(app);
+        if (ShouldMapDocumentation(app)) app.MapDocumentation();
+        SeedDefaultUser(app);
     }
 
     private static bool ShouldApplyMigrations(WebApplication app)
@@ -105,5 +100,38 @@ public static class Configuration
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
+    }
+
+    private static bool ShouldMapDocumentation(WebApplication app)
+    {
+        return app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableApiDocs");
+    }
+
+    private static void SeedDefaultUser(WebApplication app)
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var user = db.Users.SingleOrDefault(u => u.Username == DefaultUsername);
+        var created = false;
+        if (user is null)
+        {
+            user = new User
+            {
+                Username = DefaultUsername,
+                PasswordHash = ""
+            };
+            db.Users.Add(user);
+            created = true;
+        }
+
+        user.PasswordHash = Cryptography.Hash(DefaultPassword, user);
+        db.SaveChanges();
+
+        app.Logger.LogInformation(
+            "Default user {Username} {Action}.",
+            DefaultUsername,
+            created ? "created" : "updated"
+        );
     }
 }
