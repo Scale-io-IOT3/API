@@ -8,5 +8,8 @@ namespace Infrastructure.Clients;
 public class FreshFoodsClient(HttpClient client, IAuth auth) : AuthClient<FreshFoodResponse>(client, auth)
 {
     private const string Url = "https://api.nal.usda.gov/fdc/v1/foods/search";
-    protected override string Request(string url) => $"{Url}?api_key={Key()}&query={base.Request(url)}&dataType=SR%20Legacy";
+    protected override string Request(string url)
+    {
+        return $"{Url}?api_key={Key()}&query={base.Request(url)}&dataType=SR%20Legacy&pageSize=25";
+    }
 }

@@ -127,22 +127,20 @@ public static class DependencyInjection
 
     private static string ResolveConnectionString(IConfiguration configuration)
     {
-        var source = configuration["DATABASE_URL"] ?? configuration.GetConnectionString("DefaultConnection");
-        if (string.IsNullOrWhiteSpace(source))
-        {
-            throw new InvalidOperationException(
-                "Database connection string was not configured. Set SOURCE or ConnectionStrings:DefaultConnection."
-            );
-        }
+        var source = GetConnectionString(configuration);
 
-        if (source.Contains("Data Source=", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "SQLite connection string detected in SOURCE. Set SOURCE to a PostgreSQL connection string (e.g. Host=postgres;Port=5432;Database=scaleio;Username=postgres;Password=postgres)."
-            );
-        }
+        if (string.IsNullOrWhiteSpace(source)) throw new InvalidOperationException(
+            "Database connection string was not configured. Set SOURCE (or DATABASE_URL) or ConnectionStrings:DefaultConnection."
+        );
 
         return source;
+    }
+
+    private static string? GetConnectionString(IConfiguration configuration)
+    {
+        return configuration["DATABASE_URL"] ??
+        configuration["SOURCE"] ??
+        configuration.GetConnectionString("DefaultConnection");
     }
 
     private static byte[] ResolveSigningKey(JwtOptions options, IConfiguration configuration)
