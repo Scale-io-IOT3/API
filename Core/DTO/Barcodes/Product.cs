@@ -5,9 +5,57 @@ namespace Core.DTO.Barcodes;
 
 public class Product
 {
-    [JsonPropertyName("brands")] public required string Brands { get; set; }
+    [JsonPropertyName("brands")] public string? Brands { get; set; }
+    [JsonPropertyName("product_name")] public string? Name { get; set; }
+    [JsonPropertyName("product_name_en")] public string? NameEn { get; set; }
+    [JsonPropertyName("product_name_fr")] public string? NameFr { get; set; }
+    [JsonPropertyName("generic_name")] public string? GenericName { get; set; }
+    [JsonPropertyName("generic_name_en")] public string? GenericNameEn { get; set; }
+    [JsonPropertyName("nutriments")] public BarcodeNutriments? Nutriments { get; set; }
 
-    [JsonPropertyName("product_name")] public required string Name { get; set; }
+    [JsonIgnore] public string ResolvedBrand => Brands?.Trim() ?? string.Empty;
 
-    [JsonPropertyName("nutriments")] public required MacrosDto MacrosDto { get; set; }
+    [JsonIgnore]
+    public string ResolvedName => FirstNonEmpty(Name, NameEn, NameFr, GenericName, GenericNameEn);
+
+    [JsonIgnore] public MacrosDto ResolvedMacros => Nutriments?.ToMacrosDto() ?? MacrosDto.From(0, 0, 0, 0);
+
+    private static string FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return string.Empty;
+    }
+}
+
+public class BarcodeNutriments
+{
+    [JsonPropertyName("energy-kcal_100g")] public double? EnergyKcal100g { get; init; }
+    [JsonPropertyName("energy-kcal")] public double? EnergyKcal { get; init; }
+    [JsonPropertyName("energy-kcal_value_computed")] public double? EnergyKcalComputed { get; init; }
+
+    [JsonPropertyName("carbohydrates_100g")] public double? Carbohydrates100g { get; init; }
+    [JsonPropertyName("carbohydrates")] public double? Carbohydrates { get; init; }
+
+    [JsonPropertyName("fat_100g")] public double? Fat100g { get; init; }
+    [JsonPropertyName("fat")] public double? Fat { get; init; }
+
+    [JsonPropertyName("proteins_100g")] public double? Proteins100g { get; init; }
+    [JsonPropertyName("proteins")] public double? Proteins { get; init; }
+
+    public MacrosDto ToMacrosDto()
+    {
+        var carbs = Carbohydrates100g ?? Carbohydrates ?? 0;
+        var fat = Fat100g ?? Fat ?? 0;
+        var proteins = Proteins100g ?? Proteins ?? 0;
+        var calories = EnergyKcal100g ?? EnergyKcal ?? EnergyKcalComputed ?? carbs * 4 + fat * 9 + proteins * 4;
+
+        return MacrosDto.From(carbs, fat, proteins, (int)Math.Round(calories));
+    }
 }

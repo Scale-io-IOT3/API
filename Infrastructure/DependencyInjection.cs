@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Cryptography;
 using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
+using Core.DTO.OpenFoodFacts;
 using Core.Interface;
 using Core.Interface.Foods;
 using Core.Interface.Login;
@@ -51,6 +52,10 @@ public static class DependencyInjection
             .AddPolicyHandler(GetRetryPolicy());
         services.AddHttpClient<IClient<FreshFoodResponse>, FreshFoodsClient>(ConfigureHttpClient)
             .AddPolicyHandler(GetRetryPolicy());
+        services.AddHttpClient<IClient<OpenFoodSearchResponse>, OpenFoodSearchClient>(ConfigureHttpClient)
+            .AddPolicyHandler(GetRetryPolicy());
+        services.AddHttpClient<IGtinSearchClient, GtinSearchClient>(ConfigureHttpClient)
+            .AddPolicyHandler(GetRetryPolicy());
     }
 
     private static void AddPersistence(this IServiceCollection services, IConfiguration configuration)
@@ -66,8 +71,8 @@ public static class DependencyInjection
         services.AddScoped<IAuth, Authenticator>();
         services.AddScoped<ITokenHandler, TokenHandler>();
         services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<IBarcodeService, BarcodeFoodService>();
-        services.AddScoped<IFreshFoodsService, FreshFoodService>();
+        services.AddScoped<IBarcodeService, ConsensusBarcodeService>();
+        services.AddScoped<IFreshFoodsService, ConsensusFreshFoodsService>();
         services.AddScoped<IMealsService, MealServie>();
     }
 
