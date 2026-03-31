@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using Polly.CircuitBreaker;
 using Core.DTO.Barcodes;
 using Core.DTO.Foods;
 using Core.DTO.FreshFoods;
@@ -53,26 +52,26 @@ public class ConsensusBarcodeService(
         AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12)
     };
 
-    private readonly SourceSettings _openFoodBarcodeSource = BuildSourceSettings(
+    private readonly SourceSettings _openFoodBarcodeSource = SourceSettingsResolver.Build(
         configuration,
         BarcodeSource,
         false,
         "OpenFoodFacts"
     );
-    private readonly SourceSettings _openFoodSearchSource = BuildSourceSettings(
+    private readonly SourceSettings _openFoodSearchSource = SourceSettingsResolver.Build(
         configuration,
         OpenFoodSearchSource,
         false,
         "OpenFoodFacts"
     );
-    private readonly SourceSettings _usdaSource = BuildSourceSettings(configuration, UsdaSource, true);
-    private readonly SourceSettings _gtinBarcodeSource = BuildSourceSettings(
+    private readonly SourceSettings _usdaSource = SourceSettingsResolver.Build(configuration, UsdaSource, true);
+    private readonly SourceSettings _gtinBarcodeSource = SourceSettingsResolver.Build(
         configuration,
         GtinBarcodeSource,
         true,
         "GTINSearch"
     );
-    private readonly SourceSettings _gtinSearchSource = BuildSourceSettings(
+    private readonly SourceSettings _gtinSearchSource = SourceSettingsResolver.Build(
         configuration,
         GtinSearchSource,
         true,
@@ -156,14 +155,14 @@ public class ConsensusBarcodeService(
         {
             var gtinBarcodeTask = RunWithBudgetRaw(
                 token => FetchGtinBarcode(barcode, token),
-                GtinBarcodeBudgetMs,
                 _gtinBarcodeSource,
+                GtinBarcodeBudgetMs,
                 barcode
             );
             var barcodeTask = RunWithBudgetAnchor(
                 token => FetchBarcodeAnchor(barcode, token),
-                BarcodeAnchorBudgetMs,
                 _openFoodBarcodeSource,
+                BarcodeAnchorBudgetMs,
                 barcode
             );
 
@@ -193,20 +192,20 @@ public class ConsensusBarcodeService(
 
             var usdaTask = RunWithBudget(
                 token => FetchUsda(identityQuery, anchor, token),
-                UsdaBudgetMs,
                 _usdaSource,
+                UsdaBudgetMs,
                 identityQuery
             );
             var gtinSearchTask = RunWithBudget(
                 token => FetchGtinSearch(identityQuery, anchor, token),
-                GtinSearchBudgetMs,
                 _gtinSearchSource,
+                GtinSearchBudgetMs,
                 identityQuery
             );
             var openFoodTask = RunWithBudget(
                 token => FetchOpenFoodSearch(identityQuery, anchor, token),
-                OpenFoodBudgetMs,
                 _openFoodSearchSource,
+                OpenFoodBudgetMs,
                 identityQuery
             );
 
@@ -393,250 +392,59 @@ public class ConsensusBarcodeService(
 
     private async Task<SourceCandidates> RunWithBudget(
         Func<CancellationToken, Task<SourceCandidates>> sourceCall,
-        int timeoutMs,
         SourceSettings source,
+        int timeoutMs,
         string query
     )
     {
-        if (!source.Enabled)
-        {
-            return new SourceCandidates([], 0);
-        }
-
-        if (SourceAvailabilityGate.IsBlocked(source.Name, out var blockedFor))
-        {
-            logger.LogWarning(
-                "Source skipped (temporarily unavailable). source={Source}, query='{Query}', retry_in_ms={RetryInMs}",
-                source.Name,
-                query,
-                Math.Max(1, (int)blockedFor.TotalMilliseconds)
-            );
-            return new SourceCandidates([], 0);
-        }
-
-        using var cts = new CancellationTokenSource(timeoutMs);
-        try
-        {
-            var result = await sourceCall(cts.Token);
-            SourceAvailabilityGate.MarkSuccess(source.Name);
-            return result;
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                "Source timeout in barcode consensus. source={Source}, query='{Query}', timeout_ms={TimeoutMs}",
-                source.Name,
-                query,
-                timeoutMs
-            );
-
-            return new SourceCandidates([], timeoutMs);
-        }
-        catch (BrokenCircuitException)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                "Source circuit breaker is open. source={Source}, query='{Query}'",
-                source.Name,
-                query
-            );
-            return new SourceCandidates([], 0);
-        }
-        catch (Exception ex)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                ex,
-                "Source failed in barcode consensus. source={Source}, query='{Query}'",
-                source.Name,
-                query
-            );
-            return new SourceCandidates([], 0);
-        }
+        return await SourceCallExecutor.ExecuteWithBudget(
+            sourceCall,
+            source,
+            timeoutMs,
+            query,
+            logger,
+            "barcode consensus",
+            timeout => new SourceCandidates([], timeout),
+            () => new SourceCandidates([], 0)
+        );
     }
 
     private async Task<BarcodeAnchorResult> RunWithBudgetAnchor(
         Func<CancellationToken, Task<BarcodeAnchorResult>> sourceCall,
-        int timeoutMs,
         SourceSettings source,
+        int timeoutMs,
         string query
     )
     {
-        if (!source.Enabled)
-        {
-            return new BarcodeAnchorResult(null, 0);
-        }
-
-        if (SourceAvailabilityGate.IsBlocked(source.Name, out var blockedFor))
-        {
-            logger.LogWarning(
-                "Source skipped (temporarily unavailable). source={Source}, query='{Query}', retry_in_ms={RetryInMs}",
-                source.Name,
-                query,
-                Math.Max(1, (int)blockedFor.TotalMilliseconds)
-            );
-            return new BarcodeAnchorResult(null, 0);
-        }
-
-        using var cts = new CancellationTokenSource(timeoutMs);
-        try
-        {
-            var result = await sourceCall(cts.Token);
-            SourceAvailabilityGate.MarkSuccess(source.Name);
-            return result;
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                "Source timeout in barcode identity step. source={Source}, query='{Query}', timeout_ms={TimeoutMs}",
-                source.Name,
-                query,
-                timeoutMs
-            );
-
-            return new BarcodeAnchorResult(null, timeoutMs);
-        }
-        catch (BrokenCircuitException)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                "Source circuit breaker is open. source={Source}, query='{Query}'",
-                source.Name,
-                query
-            );
-            return new BarcodeAnchorResult(null, 0);
-        }
-        catch (Exception ex)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                ex,
-                "Source failed in barcode identity step. source={Source}, query='{Query}'",
-                source.Name,
-                query
-            );
-            return new BarcodeAnchorResult(null, 0);
-        }
+        return await SourceCallExecutor.ExecuteWithBudget(
+            sourceCall,
+            source,
+            timeoutMs,
+            query,
+            logger,
+            "barcode identity step",
+            timeout => new BarcodeAnchorResult(null, timeout),
+            () => new BarcodeAnchorResult(null, 0)
+        );
     }
 
     private async Task<RawSourceCandidates> RunWithBudgetRaw(
         Func<CancellationToken, Task<RawSourceCandidates>> sourceCall,
-        int timeoutMs,
         SourceSettings source,
+        int timeoutMs,
         string query
     )
     {
-        if (!source.Enabled)
-        {
-            return new RawSourceCandidates([], 0);
-        }
-
-        if (SourceAvailabilityGate.IsBlocked(source.Name, out var blockedFor))
-        {
-            logger.LogWarning(
-                "Source skipped (temporarily unavailable). source={Source}, query='{Query}', retry_in_ms={RetryInMs}",
-                source.Name,
-                query,
-                Math.Max(1, (int)blockedFor.TotalMilliseconds)
-            );
-            return new RawSourceCandidates([], 0);
-        }
-
-        using var cts = new CancellationTokenSource(timeoutMs);
-        try
-        {
-            var result = await sourceCall(cts.Token);
-            SourceAvailabilityGate.MarkSuccess(source.Name);
-            return result;
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                "Source timeout in barcode identity step. source={Source}, query='{Query}', timeout_ms={TimeoutMs}",
-                source.Name,
-                query,
-                timeoutMs
-            );
-
-            return new RawSourceCandidates([], timeoutMs);
-        }
-        catch (BrokenCircuitException)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                "Source circuit breaker is open. source={Source}, query='{Query}'",
-                source.Name,
-                query
-            );
-            return new RawSourceCandidates([], 0);
-        }
-        catch (Exception ex)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                ex,
-                "Source failed in barcode identity step. source={Source}, query='{Query}'",
-                source.Name,
-                query
-            );
-            return new RawSourceCandidates([], 0);
-        }
-    }
-
-    private static SourceSettings BuildSourceSettings(
-        IConfiguration configuration,
-        string sourceName,
-        bool defaultEnabled,
-        string? groupName = null
-    )
-    {
-        var groupEnabled = groupName is null ? defaultEnabled : IsSourceEnabled(configuration, groupName, defaultEnabled);
-        var enabled = IsSourceEnabled(configuration, sourceName, groupEnabled);
-        var failureThreshold = ReadSourceInt(configuration, sourceName, groupName, "FailureThreshold", 2);
-        var cooldownSeconds = ReadSourceInt(configuration, sourceName, groupName, "CooldownSeconds", 120);
-
-        return new SourceSettings(
-            sourceName,
-            enabled,
-            Math.Max(1, failureThreshold),
-            TimeSpan.FromSeconds(Math.Max(5, cooldownSeconds))
+        return await SourceCallExecutor.ExecuteWithBudget(
+            sourceCall,
+            source,
+            timeoutMs,
+            query,
+            logger,
+            "barcode identity step",
+            timeout => new RawSourceCandidates([], timeout),
+            () => new RawSourceCandidates([], 0)
         );
-    }
-
-    private static bool IsSourceEnabled(IConfiguration configuration, string sourceName, bool defaultValue)
-    {
-        var raw = configuration[$"Sources:{sourceName}:Enabled"];
-        return bool.TryParse(raw, out var parsed) ? parsed : defaultValue;
-    }
-
-    private static int ReadSourceInt(
-        IConfiguration configuration,
-        string sourceName,
-        string? groupName,
-        string setting,
-        int defaultValue
-    )
-    {
-        var sourceRaw = configuration[$"Sources:{sourceName}:{setting}"];
-        if (int.TryParse(sourceRaw, out var sourceValue))
-        {
-            return sourceValue;
-        }
-
-        if (!string.IsNullOrWhiteSpace(groupName))
-        {
-            var groupRaw = configuration[$"Sources:{groupName}:{setting}"];
-            if (int.TryParse(groupRaw, out var groupValue))
-            {
-                return groupValue;
-            }
-        }
-
-        var globalRaw = configuration[$"Sources:Global:{setting}"];
-        return int.TryParse(globalRaw, out var globalValue) ? globalValue : defaultValue;
     }
 
     private static RawCandidate? ToRawFromOpenFoodSearch(OpenFoodSearchProduct product)
@@ -1222,7 +1030,6 @@ public class ConsensusBarcodeService(
     private sealed record SourceCandidates(List<Candidate> Candidates, long LatencyMs);
     private sealed record RawSourceCandidates(List<RawCandidate> RawCandidates, long LatencyMs);
     private sealed record BarcodeAnchorResult(RawCandidate? Anchor, long LatencyMs);
-    private sealed record SourceSettings(string Name, bool Enabled, int FailureThreshold, TimeSpan Cooldown);
 
     private sealed record ConsensusFood(
         string Name,

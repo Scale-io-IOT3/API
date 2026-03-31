@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using Polly.CircuitBreaker;
 using Core.DTO.Foods;
 using Core.DTO.FreshFoods;
 using Core.DTO.GtinSearch;
@@ -42,9 +41,9 @@ public class ConsensusFreshFoodsService(
         AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12)
     };
 
-    private readonly SourceSettings _usdaSource = BuildSourceSettings(configuration, Usda, true);
-    private readonly SourceSettings _openFoodSource = BuildSourceSettings(configuration, OpenFoodFacts, false);
-    private readonly SourceSettings _gtinSource = BuildSourceSettings(configuration, GtinSearch, true);
+    private readonly SourceSettings _usdaSource = SourceSettingsResolver.Build(configuration, Usda, true);
+    private readonly SourceSettings _openFoodSource = SourceSettingsResolver.Build(configuration, OpenFoodFacts, false);
+    private readonly SourceSettings _gtinSource = SourceSettingsResolver.Build(configuration, GtinSearch, true);
 
     public async Task<FoodResponse?> FetchAsync(string input, double? grams = null)
     {
@@ -70,23 +69,35 @@ public class ConsensusFreshFoodsService(
 
         if (!cacheHit)
         {
-            var usdaTask = RunWithBudget(
+            var usdaTask = SourceCallExecutor.ExecuteWithBudget(
                 token => FetchUsda(normalizedQuery, token),
-                UsdaBudgetMs,
                 _usdaSource,
-                normalizedQuery
+                UsdaBudgetMs,
+                normalizedQuery,
+                logger,
+                "consensus search",
+                timeoutMs => new SourceCandidates([], timeoutMs),
+                () => new SourceCandidates([], 0)
             );
-            var gtinTask = RunWithBudget(
+            var gtinTask = SourceCallExecutor.ExecuteWithBudget(
                 token => FetchGtinSearch(normalizedQuery, token),
-                GtinBudgetMs,
                 _gtinSource,
-                normalizedQuery
+                GtinBudgetMs,
+                normalizedQuery,
+                logger,
+                "consensus search",
+                timeoutMs => new SourceCandidates([], timeoutMs),
+                () => new SourceCandidates([], 0)
             );
-            var openFoodTask = RunWithBudget(
+            var openFoodTask = SourceCallExecutor.ExecuteWithBudget(
                 token => FetchOpenFood(normalizedQuery, token),
-                OpenFoodBudgetMs,
                 _openFoodSource,
-                normalizedQuery
+                OpenFoodBudgetMs,
+                normalizedQuery,
+                logger,
+                "consensus search",
+                timeoutMs => new SourceCandidates([], timeoutMs),
+                () => new SourceCandidates([], 0)
             );
 
             await Task.WhenAll(usdaTask, gtinTask, openFoodTask);
@@ -188,123 +199,6 @@ public class ConsensusFreshFoodsService(
         return new SourceCandidates(candidates, sw.ElapsedMilliseconds);
     }
 
-    private async Task<SourceCandidates> RunWithBudget(
-        Func<CancellationToken, Task<SourceCandidates>> sourceCall,
-        int timeoutMs,
-        SourceSettings source,
-        string query
-    )
-    {
-        if (!source.Enabled)
-        {
-            return new SourceCandidates([], 0);
-        }
-
-        if (SourceAvailabilityGate.IsBlocked(source.Name, out var blockedFor))
-        {
-            logger.LogWarning(
-                "Source skipped (temporarily unavailable). source={Source}, query='{Query}', retry_in_ms={RetryInMs}",
-                source.Name,
-                query,
-                Math.Max(1, (int)blockedFor.TotalMilliseconds)
-            );
-            return new SourceCandidates([], 0);
-        }
-
-        using var cts = new CancellationTokenSource(timeoutMs);
-        try
-        {
-            var result = await sourceCall(cts.Token);
-            SourceAvailabilityGate.MarkSuccess(source.Name);
-            return result;
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                "Source timeout in consensus search. source={Source}, query='{Query}', timeout_ms={TimeoutMs}",
-                source.Name,
-                query,
-                timeoutMs
-            );
-
-            return new SourceCandidates([], timeoutMs);
-        }
-        catch (BrokenCircuitException)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                "Source circuit breaker is open. source={Source}, query='{Query}'",
-                source.Name,
-                query
-            );
-            return new SourceCandidates([], 0);
-        }
-        catch (Exception ex)
-        {
-            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
-            logger.LogWarning(
-                ex,
-                "Source failed in consensus search. source={Source}, query='{Query}'",
-                source.Name,
-                query
-            );
-            return new SourceCandidates([], 0);
-        }
-    }
-
-    private static SourceSettings BuildSourceSettings(
-        IConfiguration configuration,
-        string sourceName,
-        bool defaultEnabled,
-        string? groupName = null
-    )
-    {
-        var groupEnabled = groupName is null ? defaultEnabled : IsSourceEnabled(configuration, groupName, defaultEnabled);
-        var enabled = IsSourceEnabled(configuration, sourceName, groupEnabled);
-        var failureThreshold = ReadSourceInt(configuration, sourceName, groupName, "FailureThreshold", 2);
-        var cooldownSeconds = ReadSourceInt(configuration, sourceName, groupName, "CooldownSeconds", 120);
-
-        return new SourceSettings(
-            sourceName,
-            enabled,
-            Math.Max(1, failureThreshold),
-            TimeSpan.FromSeconds(Math.Max(5, cooldownSeconds))
-        );
-    }
-
-    private static bool IsSourceEnabled(IConfiguration configuration, string sourceName, bool defaultValue)
-    {
-        var raw = configuration[$"Sources:{sourceName}:Enabled"];
-        return bool.TryParse(raw, out var parsed) ? parsed : defaultValue;
-    }
-
-    private static int ReadSourceInt(
-        IConfiguration configuration,
-        string sourceName,
-        string? groupName,
-        string setting,
-        int defaultValue
-    )
-    {
-        var sourceRaw = configuration[$"Sources:{sourceName}:{setting}"];
-        if (int.TryParse(sourceRaw, out var sourceValue))
-        {
-            return sourceValue;
-        }
-
-        if (!string.IsNullOrWhiteSpace(groupName))
-        {
-            var groupRaw = configuration[$"Sources:{groupName}:{setting}"];
-            if (int.TryParse(groupRaw, out var groupValue))
-            {
-                return groupValue;
-            }
-        }
-
-        var globalRaw = configuration[$"Sources:Global:{setting}"];
-        return int.TryParse(globalRaw, out var globalValue) ? globalValue : defaultValue;
-    }
 
     private static Candidate? FromOpenFood(OpenFoodSearchProduct product, string normalizedQuery)
     {
@@ -834,7 +728,6 @@ public class ConsensusFreshFoodsService(
 
     private sealed record AggregateResult(double Value, double NormalizedMad);
     private sealed record SourceCandidates(List<Candidate> Candidates, long LatencyMs);
-    private sealed record SourceSettings(string Name, bool Enabled, int FailureThreshold, TimeSpan Cooldown);
 
     private sealed record ConsensusFood(
         string Name,
