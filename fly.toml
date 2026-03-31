@@ -13,6 +13,8 @@ primary_region = 'yyz'
 
 [env]
   ASPNETCORE_ENVIRONMENT = 'Production'
+  ApplyMigrationsOnStartup = 'true'
+  SeedDefaultUserOnStartup = 'true'
   Jwt__Audience = 'https://scale-io-api.fly.dev'
   Jwt__Issuer = 'https://scale-io-api.fly.dev'
   Jwt__TokenValidityMins = '60'
