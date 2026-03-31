@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
@@ -84,15 +85,41 @@ public static class Configuration
 
     private static void ConfigureStartupExperience(this WebApplication app)
     {
-        if (ShouldApplyMigrations(app)) ApplyMigrations(app);
+        var migrationsApplied = false;
+        if (ShouldApplyMigrations(app))
+        {
+            ApplyMigrations(app);
+            migrationsApplied = true;
+        }
+
         if (ShouldMapDocumentation(app)) app.MapDocumentation();
-        SeedDefaultUser(app);
+
+        if (ShouldSeedDefaultUser(app, migrationsApplied))
+        {
+            SeedDefaultUser(app);
+        }
     }
 
     private static bool ShouldApplyMigrations(WebApplication app)
     {
         var configured = app.Configuration.GetValue<bool?>("ApplyMigrationsOnStartup");
-        return configured ?? app.Environment.IsDevelopment();
+        return configured ?? true;
+    }
+
+    private static bool ShouldSeedDefaultUser(WebApplication app, bool migrationsApplied)
+    {
+        var enabled = app.Configuration.GetValue<bool?>("SeedDefaultUserOnStartup") ?? true;
+        if (!enabled)
+        {
+            return false;
+        }
+
+        if (migrationsApplied)
+        {
+            return true;
+        }
+
+        return HasUsersTable(app);
     }
 
     private static void ApplyMigrations(WebApplication app)
@@ -105,6 +132,32 @@ public static class Configuration
     private static bool ShouldMapDocumentation(WebApplication app)
     {
         return app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableApiDocs");
+    }
+
+    private static bool HasUsersTable(WebApplication app)
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        try
+        {
+            using var connection = db.Database.GetDbConnection();
+            if (connection.State != ConnectionState.Open)
+            {
+                connection.Open();
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText = "select to_regclass('public.\"Users\"')::text;";
+
+            var result = command.ExecuteScalar()?.ToString();
+            return !string.IsNullOrWhiteSpace(result);
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogWarning(ex, "Unable to verify Users table before default-user seeding.");
+            return false;
+        }
     }
 
     private static void SeedDefaultUser(WebApplication app)
