@@ -47,7 +47,15 @@ public class CachedFoodsService<T>(IClient<T> client, IMemoryCache cache, ILogge
         if (!cacheHit)
         {
             var stopwatch = Stopwatch.StartNew();
-            source = await client.Fetch(normalized);
+            try
+            {
+                source = await client.Fetch(normalized);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Source request failed. service={Service}, normalized_query='{Query}'", typeof(T).Name, normalized);
+                source = default;
+            }
             stopwatch.Stop();
             sourceLatencyMs = stopwatch.ElapsedMilliseconds;
 

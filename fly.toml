@@ -18,6 +18,14 @@ primary_region = 'yyz'
   Jwt__TokenValidityMins = '60'
   Logging__LogLevel__Default = 'Information'
   Logging__LogLevel__Microsoft__AspNetCore = 'Warning'
+  Sources__Global__FailureThreshold = '2'
+  Sources__Global__CooldownSeconds = '120'
+  Sources__USDA__Enabled = 'true'
+  Sources__GTINSearch__Enabled = 'true'
+  Sources__GTINSearchBarcode__Enabled = 'true'
+  Sources__OpenFoodFacts__Enabled = 'false'
+  Sources__OpenFoodFactsBarcode__Enabled = 'false'
+  Sources__OpenFoodFactsSearch__Enabled = 'false'
 
 
 [http_service]

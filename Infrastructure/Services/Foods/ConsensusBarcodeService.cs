@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Polly.CircuitBreaker;
 using Core.DTO.Barcodes;
 using Core.DTO.Foods;
 using Core.DTO.FreshFoods;
@@ -8,6 +9,7 @@ using Core.DTO.GtinSearch;
 using Core.DTO.OpenFoodFacts;
 using Core.Interface;
 using Core.Interface.Foods;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -18,6 +20,7 @@ public class ConsensusBarcodeService(
     IClient<FreshFoodResponse> usdaClient,
     IClient<OpenFoodSearchResponse> openFoodSearchClient,
     IGtinSearchClient gtinSearchClient,
+    IConfiguration configuration,
     IMemoryCache cache,
     ILogger<ConsensusBarcodeService> logger
 ) : IBarcodeService
@@ -31,6 +34,11 @@ public class ConsensusBarcodeService(
     private const int MaxSourceCandidates = 25;
     private const int MinBarcodeLength = 8;
     private const int MaxBarcodeLength = 14;
+    private const int BarcodeAnchorBudgetMs = 250;
+    private const int GtinBarcodeBudgetMs = 400;
+    private const int UsdaBudgetMs = 900;
+    private const int OpenFoodBudgetMs = 250;
+    private const int GtinSearchBudgetMs = 400;
 
     private const double BarcodeReliability = 0.98;
     private const double UsdaReliability = 0.95;
@@ -44,6 +52,32 @@ public class ConsensusBarcodeService(
         SlidingExpiration = TimeSpan.FromHours(1),
         AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12)
     };
+
+    private readonly SourceSettings _openFoodBarcodeSource = BuildSourceSettings(
+        configuration,
+        BarcodeSource,
+        false,
+        "OpenFoodFacts"
+    );
+    private readonly SourceSettings _openFoodSearchSource = BuildSourceSettings(
+        configuration,
+        OpenFoodSearchSource,
+        false,
+        "OpenFoodFacts"
+    );
+    private readonly SourceSettings _usdaSource = BuildSourceSettings(configuration, UsdaSource, true);
+    private readonly SourceSettings _gtinBarcodeSource = BuildSourceSettings(
+        configuration,
+        GtinBarcodeSource,
+        true,
+        "GTINSearch"
+    );
+    private readonly SourceSettings _gtinSearchSource = BuildSourceSettings(
+        configuration,
+        GtinSearchSource,
+        true,
+        "GTINSearch"
+    );
 
     private static readonly HashSet<string> NameKeys = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -120,13 +154,25 @@ public class ConsensusBarcodeService(
 
         if (!cacheHit)
         {
-            var barcodeTask = FetchBarcodeAnchor(barcode);
-            var gtinBarcodeTask = FetchGtinBarcode(barcode);
-            await Task.WhenAll(barcodeTask, gtinBarcodeTask);
+            var gtinBarcodeTask = RunWithBudgetRaw(
+                token => FetchGtinBarcode(barcode, token),
+                GtinBarcodeBudgetMs,
+                _gtinBarcodeSource,
+                barcode
+            );
+            var barcodeTask = RunWithBudgetAnchor(
+                token => FetchBarcodeAnchor(barcode, token),
+                BarcodeAnchorBudgetMs,
+                _openFoodBarcodeSource,
+                barcode
+            );
 
-            var barcodeAnchor = barcodeTask.Result.Anchor;
-            var gtinBarcode = gtinBarcodeTask.Result;
-            barcodeLatency = barcodeTask.Result.LatencyMs;
+            await Task.WhenAll(barcodeTask, gtinBarcodeTask);
+            var barcodeAnchorResult = await barcodeTask;
+            var gtinBarcode = await gtinBarcodeTask;
+
+            var barcodeAnchor = barcodeAnchorResult.Anchor;
+            barcodeLatency = barcodeAnchorResult.LatencyMs;
             gtinBarcodeLatency = gtinBarcode.LatencyMs;
 
             var anchorRaw = barcodeAnchor ?? gtinBarcode.RawCandidates.FirstOrDefault();
@@ -145,15 +191,29 @@ public class ConsensusBarcodeService(
             var anchor = CreateAnchor(anchorRaw);
             identityQuery = BuildIdentityQuery(anchor.Name, anchor.Brand);
 
-            var usdaTask = FetchUsda(identityQuery, anchor);
-            var openFoodTask = FetchOpenFoodSearch(identityQuery, anchor);
-            var gtinSearchTask = FetchGtinSearch(identityQuery, anchor);
+            var usdaTask = RunWithBudget(
+                token => FetchUsda(identityQuery, anchor, token),
+                UsdaBudgetMs,
+                _usdaSource,
+                identityQuery
+            );
+            var gtinSearchTask = RunWithBudget(
+                token => FetchGtinSearch(identityQuery, anchor, token),
+                GtinSearchBudgetMs,
+                _gtinSearchSource,
+                identityQuery
+            );
+            var openFoodTask = RunWithBudget(
+                token => FetchOpenFoodSearch(identityQuery, anchor, token),
+                OpenFoodBudgetMs,
+                _openFoodSearchSource,
+                identityQuery
+            );
 
-            await Task.WhenAll(usdaTask, openFoodTask, gtinSearchTask);
-
-            var usda = usdaTask.Result;
-            var openFood = openFoodTask.Result;
-            var gtinSearch = gtinSearchTask.Result;
+            await Task.WhenAll(usdaTask, gtinSearchTask, openFoodTask);
+            var usda = await usdaTask;
+            var gtinSearch = await gtinSearchTask;
+            var openFood = await openFoodTask;
 
             usdaLatency = usda.LatencyMs;
             openFoodLatency = openFood.LatencyMs;
@@ -210,142 +270,373 @@ public class ConsensusBarcodeService(
         return new FoodResponse { Foods = [dto] };
     }
 
-    private async Task<BarcodeAnchorResult> FetchBarcodeAnchor(string barcode)
+    private async Task<BarcodeAnchorResult> FetchBarcodeAnchor(string barcode, CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
-        try
+        var response = await barcodeClient.Fetch(barcode, cancellationToken);
+        sw.Stop();
+
+        if (response is null)
         {
-            var response = await barcodeClient.Fetch(barcode);
-            sw.Stop();
-
-            var product = response?.Product;
-            if (product is null || string.IsNullOrWhiteSpace(product.ResolvedName))
-            {
-                return new BarcodeAnchorResult(null, sw.ElapsedMilliseconds);
-            }
-
-            var macros = product.ResolvedMacros;
-            var calories = ResolveCalories(macros.Calories, macros.Carbohydrates, macros.Fat, macros.Proteins);
-            var raw = new RawCandidate(
-                BarcodeSource,
-                product.ResolvedName,
-                product.ResolvedBrand,
-                calories,
-                macros.Carbohydrates,
-                macros.Fat,
-                macros.Proteins,
-                BarcodeReliability,
-                1.0,
-                HasNutrition(macros.Calories, macros.Carbohydrates, macros.Fat, macros.Proteins)
-            );
-
-            return new BarcodeAnchorResult(raw, sw.ElapsedMilliseconds);
+            throw new HttpRequestException($"Source {BarcodeSource} returned no response payload.");
         }
-        catch
+
+        var product = response.Product;
+        if (product is null || string.IsNullOrWhiteSpace(product.ResolvedName))
         {
-            sw.Stop();
             return new BarcodeAnchorResult(null, sw.ElapsedMilliseconds);
         }
+
+        var macros = product.ResolvedMacros;
+        var calories = ResolveCalories(macros.Calories, macros.Carbohydrates, macros.Fat, macros.Proteins);
+        var raw = new RawCandidate(
+            BarcodeSource,
+            product.ResolvedName,
+            product.ResolvedBrand,
+            calories,
+            macros.Carbohydrates,
+            macros.Fat,
+            macros.Proteins,
+            BarcodeReliability,
+            1.0,
+            HasNutrition(macros.Calories, macros.Carbohydrates, macros.Fat, macros.Proteins)
+        );
+
+        return new BarcodeAnchorResult(raw, sw.ElapsedMilliseconds);
     }
 
-    private async Task<RawSourceCandidates> FetchGtinBarcode(string barcode)
+    private async Task<RawSourceCandidates> FetchGtinBarcode(string barcode, CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
+        var items = await gtinSearchClient.LookupBarcodeAsync(barcode, cancellationToken);
+        sw.Stop();
+
+        var raws = items
+            .Select(item => ToRawFromGtin(item, GtinBarcodeSource, 1.0, GtinBarcodeReliability))
+            .Where(raw => raw is not null)
+            .Take(MaxSourceCandidates)
+            .Cast<RawCandidate>()
+            .ToList();
+
+        return new RawSourceCandidates(raws, sw.ElapsedMilliseconds);
+    }
+
+    private async Task<SourceCandidates> FetchUsda(string identityQuery, Candidate anchor, CancellationToken cancellationToken = default)
+    {
+        var sw = Stopwatch.StartNew();
+        var response = await usdaClient.Fetch(identityQuery, cancellationToken);
+        sw.Stop();
+
+        if (response is null)
+        {
+            throw new HttpRequestException($"Source {UsdaSource} returned no response payload.");
+        }
+
+        var foods = response.FilterAndRank(identityQuery, MaxSourceCandidates).Foods;
+        var candidates = foods
+            .Select(FoodDto.FromFreshFood)
+            .Select(dto => FinalizeRaw(ToRawFromDto(UsdaSource, dto, identityQuery, UsdaReliability), anchor))
+            .Where(candidate => IsPlausible(candidate) && candidate.IdentitySimilarity >= MinIdentitySimilarity)
+            .ToList();
+
+        return new SourceCandidates(candidates, sw.ElapsedMilliseconds);
+    }
+
+    private async Task<SourceCandidates> FetchOpenFoodSearch(
+        string identityQuery,
+        Candidate anchor,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var sw = Stopwatch.StartNew();
+        var response = await openFoodSearchClient.Fetch(identityQuery, cancellationToken);
+        sw.Stop();
+
+        if (response is null)
+        {
+            throw new HttpRequestException($"Source {OpenFoodSearchSource} returned no response payload.");
+        }
+
+        var candidates = (response.Products ?? [])
+            .Select(ToRawFromOpenFoodSearch)
+            .Where(raw => raw is not null)
+            .Take(MaxSourceCandidates)
+            .Cast<RawCandidate>()
+            .Select(raw => FinalizeRaw(raw, anchor))
+            .Where(candidate => IsPlausible(candidate) && candidate.IdentitySimilarity >= MinIdentitySimilarity)
+            .ToList();
+
+        return new SourceCandidates(candidates, sw.ElapsedMilliseconds);
+    }
+
+    private async Task<SourceCandidates> FetchGtinSearch(
+        string identityQuery,
+        Candidate anchor,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var sw = Stopwatch.StartNew();
+        var items = await gtinSearchClient.SearchAsync(identityQuery, cancellationToken);
+        sw.Stop();
+
+        var candidates = items
+            .Select(item => ToRawFromGtin(item, GtinSearchSource, MatchQuality(identityQuery, Normalize(item.Name ?? string.Empty)), GtinSearchReliability))
+            .Where(raw => raw is not null)
+            .Take(MaxSourceCandidates)
+            .Cast<RawCandidate>()
+            .Select(raw => FinalizeRaw(raw, anchor))
+            .Where(candidate => IsPlausible(candidate) && candidate.IdentitySimilarity >= MinIdentitySimilarity)
+            .ToList();
+
+        return new SourceCandidates(candidates, sw.ElapsedMilliseconds);
+    }
+
+    private async Task<SourceCandidates> RunWithBudget(
+        Func<CancellationToken, Task<SourceCandidates>> sourceCall,
+        int timeoutMs,
+        SourceSettings source,
+        string query
+    )
+    {
+        if (!source.Enabled)
+        {
+            return new SourceCandidates([], 0);
+        }
+
+        if (SourceAvailabilityGate.IsBlocked(source.Name, out var blockedFor))
+        {
+            logger.LogWarning(
+                "Source skipped (temporarily unavailable). source={Source}, query='{Query}', retry_in_ms={RetryInMs}",
+                source.Name,
+                query,
+                Math.Max(1, (int)blockedFor.TotalMilliseconds)
+            );
+            return new SourceCandidates([], 0);
+        }
+
+        using var cts = new CancellationTokenSource(timeoutMs);
         try
         {
-            var items = await gtinSearchClient.LookupBarcodeAsync(barcode);
-            sw.Stop();
-
-            var raws = items
-                .Select(item => ToRawFromGtin(item, GtinBarcodeSource, 1.0, GtinBarcodeReliability))
-                .Where(raw => raw is not null)
-                .Take(MaxSourceCandidates)
-                .Cast<RawCandidate>()
-                .ToList();
-
-            return new RawSourceCandidates(raws, sw.ElapsedMilliseconds);
+            var result = await sourceCall(cts.Token);
+            SourceAvailabilityGate.MarkSuccess(source.Name);
+            return result;
         }
-        catch
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
-            sw.Stop();
-            return new RawSourceCandidates([], sw.ElapsedMilliseconds);
+            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
+            logger.LogWarning(
+                "Source timeout in barcode consensus. source={Source}, query='{Query}', timeout_ms={TimeoutMs}",
+                source.Name,
+                query,
+                timeoutMs
+            );
+
+            return new SourceCandidates([], timeoutMs);
+        }
+        catch (BrokenCircuitException)
+        {
+            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
+            logger.LogWarning(
+                "Source circuit breaker is open. source={Source}, query='{Query}'",
+                source.Name,
+                query
+            );
+            return new SourceCandidates([], 0);
+        }
+        catch (Exception ex)
+        {
+            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
+            logger.LogWarning(
+                ex,
+                "Source failed in barcode consensus. source={Source}, query='{Query}'",
+                source.Name,
+                query
+            );
+            return new SourceCandidates([], 0);
         }
     }
 
-    private async Task<SourceCandidates> FetchUsda(string identityQuery, Candidate anchor)
+    private async Task<BarcodeAnchorResult> RunWithBudgetAnchor(
+        Func<CancellationToken, Task<BarcodeAnchorResult>> sourceCall,
+        int timeoutMs,
+        SourceSettings source,
+        string query
+    )
     {
-        var sw = Stopwatch.StartNew();
+        if (!source.Enabled)
+        {
+            return new BarcodeAnchorResult(null, 0);
+        }
+
+        if (SourceAvailabilityGate.IsBlocked(source.Name, out var blockedFor))
+        {
+            logger.LogWarning(
+                "Source skipped (temporarily unavailable). source={Source}, query='{Query}', retry_in_ms={RetryInMs}",
+                source.Name,
+                query,
+                Math.Max(1, (int)blockedFor.TotalMilliseconds)
+            );
+            return new BarcodeAnchorResult(null, 0);
+        }
+
+        using var cts = new CancellationTokenSource(timeoutMs);
         try
         {
-            var response = await usdaClient.Fetch(identityQuery);
-            sw.Stop();
-
-            var foods = response?.FilterAndRank(identityQuery, MaxSourceCandidates).Foods ?? [];
-            var candidates = foods
-                .Select(FoodDto.FromFreshFood)
-                .Select(dto => FinalizeRaw(ToRawFromDto(UsdaSource, dto, identityQuery, UsdaReliability), anchor))
-                .Where(candidate => IsPlausible(candidate) && candidate.IdentitySimilarity >= MinIdentitySimilarity)
-                .ToList();
-
-            return new SourceCandidates(candidates, sw.ElapsedMilliseconds);
+            var result = await sourceCall(cts.Token);
+            SourceAvailabilityGate.MarkSuccess(source.Name);
+            return result;
         }
-        catch
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
-            sw.Stop();
-            return new SourceCandidates([], sw.ElapsedMilliseconds);
+            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
+            logger.LogWarning(
+                "Source timeout in barcode identity step. source={Source}, query='{Query}', timeout_ms={TimeoutMs}",
+                source.Name,
+                query,
+                timeoutMs
+            );
+
+            return new BarcodeAnchorResult(null, timeoutMs);
+        }
+        catch (BrokenCircuitException)
+        {
+            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
+            logger.LogWarning(
+                "Source circuit breaker is open. source={Source}, query='{Query}'",
+                source.Name,
+                query
+            );
+            return new BarcodeAnchorResult(null, 0);
+        }
+        catch (Exception ex)
+        {
+            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
+            logger.LogWarning(
+                ex,
+                "Source failed in barcode identity step. source={Source}, query='{Query}'",
+                source.Name,
+                query
+            );
+            return new BarcodeAnchorResult(null, 0);
         }
     }
 
-    private async Task<SourceCandidates> FetchOpenFoodSearch(string identityQuery, Candidate anchor)
+    private async Task<RawSourceCandidates> RunWithBudgetRaw(
+        Func<CancellationToken, Task<RawSourceCandidates>> sourceCall,
+        int timeoutMs,
+        SourceSettings source,
+        string query
+    )
     {
-        var sw = Stopwatch.StartNew();
+        if (!source.Enabled)
+        {
+            return new RawSourceCandidates([], 0);
+        }
+
+        if (SourceAvailabilityGate.IsBlocked(source.Name, out var blockedFor))
+        {
+            logger.LogWarning(
+                "Source skipped (temporarily unavailable). source={Source}, query='{Query}', retry_in_ms={RetryInMs}",
+                source.Name,
+                query,
+                Math.Max(1, (int)blockedFor.TotalMilliseconds)
+            );
+            return new RawSourceCandidates([], 0);
+        }
+
+        using var cts = new CancellationTokenSource(timeoutMs);
         try
         {
-            var response = await openFoodSearchClient.Fetch(identityQuery);
-            sw.Stop();
-
-            var candidates = (response?.Products ?? [])
-                .Select(ToRawFromOpenFoodSearch)
-                .Where(raw => raw is not null)
-                .Take(MaxSourceCandidates)
-                .Cast<RawCandidate>()
-                .Select(raw => FinalizeRaw(raw, anchor))
-                .Where(candidate => IsPlausible(candidate) && candidate.IdentitySimilarity >= MinIdentitySimilarity)
-                .ToList();
-
-            return new SourceCandidates(candidates, sw.ElapsedMilliseconds);
+            var result = await sourceCall(cts.Token);
+            SourceAvailabilityGate.MarkSuccess(source.Name);
+            return result;
         }
-        catch
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
-            sw.Stop();
-            return new SourceCandidates([], sw.ElapsedMilliseconds);
+            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
+            logger.LogWarning(
+                "Source timeout in barcode identity step. source={Source}, query='{Query}', timeout_ms={TimeoutMs}",
+                source.Name,
+                query,
+                timeoutMs
+            );
+
+            return new RawSourceCandidates([], timeoutMs);
+        }
+        catch (BrokenCircuitException)
+        {
+            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
+            logger.LogWarning(
+                "Source circuit breaker is open. source={Source}, query='{Query}'",
+                source.Name,
+                query
+            );
+            return new RawSourceCandidates([], 0);
+        }
+        catch (Exception ex)
+        {
+            SourceAvailabilityGate.MarkFailure(source.Name, source.FailureThreshold, source.Cooldown);
+            logger.LogWarning(
+                ex,
+                "Source failed in barcode identity step. source={Source}, query='{Query}'",
+                source.Name,
+                query
+            );
+            return new RawSourceCandidates([], 0);
         }
     }
 
-    private async Task<SourceCandidates> FetchGtinSearch(string identityQuery, Candidate anchor)
+    private static SourceSettings BuildSourceSettings(
+        IConfiguration configuration,
+        string sourceName,
+        bool defaultEnabled,
+        string? groupName = null
+    )
     {
-        var sw = Stopwatch.StartNew();
-        try
-        {
-            var items = await gtinSearchClient.SearchAsync(identityQuery);
-            sw.Stop();
+        var groupEnabled = groupName is null ? defaultEnabled : IsSourceEnabled(configuration, groupName, defaultEnabled);
+        var enabled = IsSourceEnabled(configuration, sourceName, groupEnabled);
+        var failureThreshold = ReadSourceInt(configuration, sourceName, groupName, "FailureThreshold", 2);
+        var cooldownSeconds = ReadSourceInt(configuration, sourceName, groupName, "CooldownSeconds", 120);
 
-            var candidates = items
-                .Select(item => ToRawFromGtin(item, GtinSearchSource, MatchQuality(identityQuery, Normalize(item.Name ?? string.Empty)), GtinSearchReliability))
-                .Where(raw => raw is not null)
-                .Take(MaxSourceCandidates)
-                .Cast<RawCandidate>()
-                .Select(raw => FinalizeRaw(raw, anchor))
-                .Where(candidate => IsPlausible(candidate) && candidate.IdentitySimilarity >= MinIdentitySimilarity)
-                .ToList();
+        return new SourceSettings(
+            sourceName,
+            enabled,
+            Math.Max(1, failureThreshold),
+            TimeSpan.FromSeconds(Math.Max(5, cooldownSeconds))
+        );
+    }
 
-            return new SourceCandidates(candidates, sw.ElapsedMilliseconds);
-        }
-        catch
+    private static bool IsSourceEnabled(IConfiguration configuration, string sourceName, bool defaultValue)
+    {
+        var raw = configuration[$"Sources:{sourceName}:Enabled"];
+        return bool.TryParse(raw, out var parsed) ? parsed : defaultValue;
+    }
+
+    private static int ReadSourceInt(
+        IConfiguration configuration,
+        string sourceName,
+        string? groupName,
+        string setting,
+        int defaultValue
+    )
+    {
+        var sourceRaw = configuration[$"Sources:{sourceName}:{setting}"];
+        if (int.TryParse(sourceRaw, out var sourceValue))
         {
-            sw.Stop();
-            return new SourceCandidates([], sw.ElapsedMilliseconds);
+            return sourceValue;
         }
+
+        if (!string.IsNullOrWhiteSpace(groupName))
+        {
+            var groupRaw = configuration[$"Sources:{groupName}:{setting}"];
+            if (int.TryParse(groupRaw, out var groupValue))
+            {
+                return groupValue;
+            }
+        }
+
+        var globalRaw = configuration[$"Sources:Global:{setting}"];
+        return int.TryParse(globalRaw, out var globalValue) ? globalValue : defaultValue;
     }
 
     private static RawCandidate? ToRawFromOpenFoodSearch(OpenFoodSearchProduct product)
@@ -931,6 +1222,7 @@ public class ConsensusBarcodeService(
     private sealed record SourceCandidates(List<Candidate> Candidates, long LatencyMs);
     private sealed record RawSourceCandidates(List<RawCandidate> RawCandidates, long LatencyMs);
     private sealed record BarcodeAnchorResult(RawCandidate? Anchor, long LatencyMs);
+    private sealed record SourceSettings(string Name, bool Enabled, int FailureThreshold, TimeSpan Cooldown);
 
     private sealed record ConsensusFood(
         string Name,

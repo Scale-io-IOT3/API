@@ -48,14 +48,15 @@ public static class DependencyInjection
 
     private static void AddClients(this IServiceCollection services)
     {
-        services.AddHttpClient<IClient<BarcodeResponse>, BarcodeClient>(ConfigureHttpClient)
-            .AddPolicyHandler(GetRetryPolicy());
-        services.AddHttpClient<IClient<FreshFoodResponse>, FreshFoodsClient>(ConfigureHttpClient)
-            .AddPolicyHandler(GetRetryPolicy());
-        services.AddHttpClient<IClient<OpenFoodSearchResponse>, OpenFoodSearchClient>(ConfigureHttpClient)
-            .AddPolicyHandler(GetRetryPolicy());
-        services.AddHttpClient<IGtinSearchClient, GtinSearchClient>(ConfigureHttpClient)
-            .AddPolicyHandler(GetRetryPolicy());
+        services.AddHttpClient<IClient<BarcodeResponse>, BarcodeClient>(ConfigureOpenFoodHttpClient)
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
+        services.AddHttpClient<IClient<FreshFoodResponse>, FreshFoodsClient>(ConfigureUsdaHttpClient)
+            .AddPolicyHandler(GetRetryPolicy())
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
+        services.AddHttpClient<IClient<OpenFoodSearchResponse>, OpenFoodSearchClient>(ConfigureOpenFoodHttpClient)
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
+        services.AddHttpClient<IGtinSearchClient, GtinSearchClient>(ConfigureGtinHttpClient)
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
     }
 
     private static void AddPersistence(this IServiceCollection services, IConfiguration configuration)
@@ -118,8 +119,26 @@ public static class DependencyInjection
 
     private static void ConfigureHttpClient(HttpClient client)
     {
-        client.Timeout = TimeSpan.FromSeconds(15);
+        client.Timeout = TimeSpan.FromSeconds(6);
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Scale.io_API/1.0");
+    }
+
+    private static void ConfigureUsdaHttpClient(HttpClient client)
+    {
+        ConfigureHttpClient(client);
+        client.Timeout = TimeSpan.FromMilliseconds(2500);
+    }
+
+    private static void ConfigureOpenFoodHttpClient(HttpClient client)
+    {
+        ConfigureHttpClient(client);
+        client.Timeout = TimeSpan.FromMilliseconds(600);
+    }
+
+    private static void ConfigureGtinHttpClient(HttpClient client)
+    {
+        ConfigureHttpClient(client);
+        client.Timeout = TimeSpan.FromMilliseconds(900);
     }
 
     private static AsyncPolicy<HttpResponseMessage> GetRetryPolicy()
@@ -127,7 +146,15 @@ public static class DependencyInjection
         return HttpPolicyExtensions
             .HandleTransientHttpError()
             .OrResult(message => message.StatusCode == HttpStatusCode.TooManyRequests)
-            .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt)));
+            .WaitAndRetryAsync(1, _ => TimeSpan.FromMilliseconds(150));
+    }
+
+    private static AsyncPolicy<HttpResponseMessage> GetSourceCircuitBreakerPolicy()
+    {
+        return HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .OrResult(message => message.StatusCode == HttpStatusCode.TooManyRequests)
+            .CircuitBreakerAsync(1, TimeSpan.FromMinutes(2));
     }
 
     private static string ResolveConnectionString(IConfiguration configuration)

@@ -26,6 +26,15 @@ public class GtinSearchClient(HttpClient client) : IGtinSearchClient
         using var response = await client.GetAsync(url, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            if ((int)response.StatusCode >= 500 || (int)response.StatusCode == 429)
+            {
+                throw new HttpRequestException(
+                    $"GTINSearch responded with {(int)response.StatusCode} ({response.StatusCode}).",
+                    null,
+                    response.StatusCode
+                );
+            }
+
             return [];
         }
 
