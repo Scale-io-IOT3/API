@@ -7,6 +7,7 @@ namespace Core.DTO.Foods;
 
 public class FoodResponse : IResponse
 {
+    private const int MaxFreshResults = 10;
     [JsonPropertyName("foods")] public required FoodDto[] Foods { get; set; }
 
 
@@ -15,11 +16,11 @@ public class FoodResponse : IResponse
         return response?.Product == null ? Empty() : FromFoods([FoodDto.FromProduct(response.Product)], grams);
     }
 
-    private static FoodResponse FromFreshFoodResponse(FreshFoodResponse? response, double grams)
+    private static FoodResponse FromFreshFoodResponse(FreshFoodResponse? response, double grams, string query)
     {
         if (response?.Foods == null || response.Foods.Length == 0) return Empty();
 
-        var foods = response.Filter()
+        var foods = response.FilterAndRank(query, MaxFreshResults)
             .Foods
             .Select(FoodDto.FromFreshFood)
             .ToArray();
@@ -27,12 +28,12 @@ public class FoodResponse : IResponse
         return FromFoods(foods, grams);
     }
 
-    public static FoodResponse From<T>(T? response, double grams)
+    public static FoodResponse From<T>(T? response, double grams, string? query = null)
     {
         return response switch
         {
             BarcodeResponse barcode => FromBarcodeResponse(barcode, grams),
-            FreshFoodResponse fresh => FromFreshFoodResponse(fresh, grams),
+            FreshFoodResponse fresh => FromFreshFoodResponse(fresh, grams, query ?? string.Empty),
             null => new FoodResponse { Foods = [] },
             _ => throw new ArgumentException($"Unsupported response type: {nameof(IResponse)}")
         };

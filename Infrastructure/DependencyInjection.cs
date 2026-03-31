@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Cryptography;
 using Core.DTO.Barcodes;
 using Core.DTO.FreshFoods;
+using Core.DTO.OpenFoodFacts;
 using Core.Interface;
 using Core.Interface.Foods;
 using Core.Interface.Login;
@@ -33,7 +34,12 @@ public static class DependencyInjection
     public static void AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
-        services.AddAuthentication(configuration);
+        var jwtOptions = configuration.GetSection("Jwt").Get<JwtOptions>()!;
+        var signingKeyBytes = ResolveSigningKey(jwtOptions, configuration);
+        var signingKey = new SymmetricSecurityKey(signingKeyBytes);
+
+        services.AddSingleton(signingKey);
+        services.AddAuthentication(configuration, signingKey);
         services.AddMemoryCache();
         services.AddPersistence(configuration);
         services.AddClients();
@@ -42,10 +48,15 @@ public static class DependencyInjection
 
     private static void AddClients(this IServiceCollection services)
     {
-        services.AddHttpClient<IClient<BarcodeResponse>, BarcodeClient>(ConfigureHttpClient)
-            .AddPolicyHandler(GetRetryPolicy());
-        services.AddHttpClient<IClient<FreshFoodResponse>, FreshFoodsClient>(ConfigureHttpClient)
-            .AddPolicyHandler(GetRetryPolicy());
+        services.AddHttpClient<IClient<BarcodeResponse>, BarcodeClient>(ConfigureOpenFoodHttpClient)
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
+        services.AddHttpClient<IClient<FreshFoodResponse>, FreshFoodsClient>(ConfigureUsdaHttpClient)
+            .AddPolicyHandler(GetRetryPolicy())
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
+        services.AddHttpClient<IClient<OpenFoodSearchResponse>, OpenFoodSearchClient>(ConfigureOpenFoodHttpClient)
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
+        services.AddHttpClient<IGtinSearchClient, GtinSearchClient>(ConfigureGtinHttpClient)
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
     }
 
     private static void AddPersistence(this IServiceCollection services, IConfiguration configuration)
@@ -61,8 +72,8 @@ public static class DependencyInjection
         services.AddScoped<IAuth, Authenticator>();
         services.AddScoped<ITokenHandler, TokenHandler>();
         services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<IBarcodeService, BarcodeFoodService>();
-        services.AddScoped<IFreshFoodsService, FreshFoodService>();
+        services.AddScoped<IBarcodeService, ConsensusBarcodeService>();
+        services.AddScoped<IFreshFoodsService, ConsensusFreshFoodsService>();
         services.AddScoped<IMealsService, MealServie>();
     }
 
@@ -74,11 +85,14 @@ public static class DependencyInjection
         services.AddScoped<IRepo<Token>, TokenRepository>();
     }
 
-    private static void AddAuthentication(this IServiceCollection services, IConfiguration configuration)
+    private static void AddAuthentication(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        SymmetricSecurityKey signingKey
+    )
     {
         var jwtSection = configuration.GetSection("Jwt");
         var jwtOptions = jwtSection.Get<JwtOptions>()!;
-        var signingKey = ResolveSigningKey(jwtOptions, configuration);
 
         services.AddAuthentication(options =>
         {
@@ -92,7 +106,7 @@ public static class DependencyInjection
             {
                 ValidIssuer = jwtOptions.Issuer,
                 ValidAudience = jwtOptions.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(signingKey),
+                IssuerSigningKey = signingKey,
                 ValidateAudience = true,
                 ValidateIssuer = true,
                 ValidateLifetime = true,
@@ -105,8 +119,26 @@ public static class DependencyInjection
 
     private static void ConfigureHttpClient(HttpClient client)
     {
-        client.Timeout = TimeSpan.FromSeconds(15);
+        client.Timeout = TimeSpan.FromSeconds(6);
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Scale.io_API/1.0");
+    }
+
+    private static void ConfigureUsdaHttpClient(HttpClient client)
+    {
+        ConfigureHttpClient(client);
+        client.Timeout = TimeSpan.FromMilliseconds(2500);
+    }
+
+    private static void ConfigureOpenFoodHttpClient(HttpClient client)
+    {
+        ConfigureHttpClient(client);
+        client.Timeout = TimeSpan.FromMilliseconds(600);
+    }
+
+    private static void ConfigureGtinHttpClient(HttpClient client)
+    {
+        ConfigureHttpClient(client);
+        client.Timeout = TimeSpan.FromMilliseconds(900);
     }
 
     private static AsyncPolicy<HttpResponseMessage> GetRetryPolicy()
@@ -114,27 +146,33 @@ public static class DependencyInjection
         return HttpPolicyExtensions
             .HandleTransientHttpError()
             .OrResult(message => message.StatusCode == HttpStatusCode.TooManyRequests)
-            .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromMilliseconds(200 * Math.Pow(2, retryAttempt)));
+            .WaitAndRetryAsync(1, _ => TimeSpan.FromMilliseconds(150));
+    }
+
+    private static AsyncPolicy<HttpResponseMessage> GetSourceCircuitBreakerPolicy()
+    {
+        return HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .OrResult(message => message.StatusCode == HttpStatusCode.TooManyRequests)
+            .CircuitBreakerAsync(1, TimeSpan.FromMinutes(2));
     }
 
     private static string ResolveConnectionString(IConfiguration configuration)
     {
-        var source = configuration["DATABASE_URL"] ?? configuration.GetConnectionString("DefaultConnection");
-        if (string.IsNullOrWhiteSpace(source))
-        {
-            throw new InvalidOperationException(
-                "Database connection string was not configured. Set SOURCE or ConnectionStrings:DefaultConnection."
-            );
-        }
+        var source = GetConnectionString(configuration);
 
-        if (source.Contains("Data Source=", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "SQLite connection string detected in SOURCE. Set SOURCE to a PostgreSQL connection string (e.g. Host=postgres;Port=5432;Database=scaleio;Username=postgres;Password=postgres)."
-            );
-        }
+        if (string.IsNullOrWhiteSpace(source)) throw new InvalidOperationException(
+            "Database connection string was not configured. Set SOURCE (or DATABASE_URL) or ConnectionStrings:DefaultConnection."
+        );
 
         return source;
+    }
+
+    private static string? GetConnectionString(IConfiguration configuration)
+    {
+        return configuration["DATABASE_URL"] ??
+        configuration["SOURCE"] ??
+        configuration.GetConnectionString("DefaultConnection");
     }
 
     private static byte[] ResolveSigningKey(JwtOptions options, IConfiguration configuration)

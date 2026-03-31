@@ -10,9 +10,10 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Infrastructure.Utils;
 
-public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITokenHandler
+public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo, SymmetricSecurityKey signingKey) : ITokenHandler
 {
     private readonly JwtOptions _options = options.Value;
+    private readonly SymmetricSecurityKey _signingKey = signingKey;
 
     public async Task<TokenResponse> Create(User user)
     {
@@ -66,9 +67,7 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo) : ITo
 
     private SigningCredentials GetSigningCredentials()
     {
-        var keyBytes = Convert.FromBase64String(_options.Key);
-        var key = new SymmetricSecurityKey(keyBytes);
-        return new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
+        return new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256Signature);
     }
 
     private async Task<TokenResponse> Rotate(Token token)

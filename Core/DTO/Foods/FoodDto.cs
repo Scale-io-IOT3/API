@@ -11,9 +11,11 @@ public class FoodDto
     [JsonPropertyName("nutriments")] public required MacrosDto HiddenMacrosDto { private get; set; }
     [JsonPropertyName("name")] public string Name => HiddenName;
     [JsonPropertyName("brands")] public required string Brands { get; set; } = "";
-    [JsonIgnore] public int Calories => MacrosDto.Calories;
+    [JsonPropertyName("calories")] public int Calories => MacrosDto.Calories;
     [JsonPropertyName("quantity")] public double Quantity { get; set; }
     [JsonPropertyName("macros")] public MacrosDto MacrosDto => HiddenMacrosDto;
+    [JsonPropertyName("confidence")] public double? Confidence { get; set; }
+    [JsonPropertyName("sources_used")] public string[] SourcesUsed { get; set; } = [];
 
     public static FoodDto FromFreshFood(FreshFood food)
     {
@@ -30,9 +32,9 @@ public class FoodDto
     {
         return new FoodDto
         {
-            Brands = food.Brands,
-            HiddenName = food.Name,
-            HiddenMacrosDto = food.MacrosDto
+            Brands = food.ResolvedBrand,
+            HiddenName = food.ResolvedName,
+            HiddenMacrosDto = food.ResolvedMacros
         };
     }
 
