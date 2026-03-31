@@ -28,9 +28,6 @@ public class ConsensusFreshFoodsService(
     private const int MaxSourceCandidates = 25;
     private const int MaxResults = 10;
     private const int MinQueryLength = 2;
-    private const int UsdaBudgetMs = 900;
-    private const int OpenFoodBudgetMs = 250;
-    private const int GtinBudgetMs = 400;
     private const double UsdaReliability = 0.95;
     private const double OpenFoodReliability = 0.75;
     private const double GtinSearchReliability = 0.65;
@@ -44,6 +41,9 @@ public class ConsensusFreshFoodsService(
     private readonly SourceSettings _usdaSource = SourceSettingsResolver.Build(configuration, Usda, true);
     private readonly SourceSettings _openFoodSource = SourceSettingsResolver.Build(configuration, OpenFoodFacts, false);
     private readonly SourceSettings _gtinSource = SourceSettingsResolver.Build(configuration, GtinSearch, true);
+    private readonly int _usdaBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, Usda, null, 2200);
+    private readonly int _openFoodBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, OpenFoodFacts, null, 1500);
+    private readonly int _gtinBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, GtinSearch, null, 4500);
 
     public async Task<FoodResponse?> FetchAsync(string input, double? grams = null)
     {
@@ -72,7 +72,7 @@ public class ConsensusFreshFoodsService(
             var usdaTask = SourceCallExecutor.ExecuteWithBudget(
                 token => FetchUsda(normalizedQuery, token),
                 _usdaSource,
-                UsdaBudgetMs,
+                _usdaBudgetMs,
                 normalizedQuery,
                 logger,
                 "consensus search",
@@ -82,7 +82,7 @@ public class ConsensusFreshFoodsService(
             var gtinTask = SourceCallExecutor.ExecuteWithBudget(
                 token => FetchGtinSearch(normalizedQuery, token),
                 _gtinSource,
-                GtinBudgetMs,
+                _gtinBudgetMs,
                 normalizedQuery,
                 logger,
                 "consensus search",
@@ -92,7 +92,7 @@ public class ConsensusFreshFoodsService(
             var openFoodTask = SourceCallExecutor.ExecuteWithBudget(
                 token => FetchOpenFood(normalizedQuery, token),
                 _openFoodSource,
-                OpenFoodBudgetMs,
+                _openFoodBudgetMs,
                 normalizedQuery,
                 logger,
                 "consensus search",

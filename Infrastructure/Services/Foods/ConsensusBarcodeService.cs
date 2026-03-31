@@ -33,11 +33,6 @@ public class ConsensusBarcodeService(
     private const int MaxSourceCandidates = 25;
     private const int MinBarcodeLength = 8;
     private const int MaxBarcodeLength = 14;
-    private const int BarcodeAnchorBudgetMs = 250;
-    private const int GtinBarcodeBudgetMs = 400;
-    private const int UsdaBudgetMs = 900;
-    private const int OpenFoodBudgetMs = 250;
-    private const int GtinSearchBudgetMs = 400;
 
     private const double BarcodeReliability = 0.98;
     private const double UsdaReliability = 0.95;
@@ -76,6 +71,31 @@ public class ConsensusBarcodeService(
         GtinSearchSource,
         true,
         "GTINSearch"
+    );
+    private readonly int _barcodeAnchorBudgetMs = SourceSettingsResolver.ReadTimeoutMs(
+        configuration,
+        BarcodeSource,
+        "OpenFoodFacts",
+        1200
+    );
+    private readonly int _gtinBarcodeBudgetMs = SourceSettingsResolver.ReadTimeoutMs(
+        configuration,
+        GtinBarcodeSource,
+        "GTINSearch",
+        1800
+    );
+    private readonly int _usdaBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, UsdaSource, null, 2200);
+    private readonly int _openFoodBudgetMs = SourceSettingsResolver.ReadTimeoutMs(
+        configuration,
+        OpenFoodSearchSource,
+        "OpenFoodFacts",
+        1500
+    );
+    private readonly int _gtinSearchBudgetMs = SourceSettingsResolver.ReadTimeoutMs(
+        configuration,
+        GtinSearchSource,
+        "GTINSearch",
+        4500
     );
 
     private static readonly HashSet<string> NameKeys = new(StringComparer.OrdinalIgnoreCase)
@@ -156,13 +176,13 @@ public class ConsensusBarcodeService(
             var gtinBarcodeTask = RunWithBudgetRaw(
                 token => FetchGtinBarcode(barcode, token),
                 _gtinBarcodeSource,
-                GtinBarcodeBudgetMs,
+                _gtinBarcodeBudgetMs,
                 barcode
             );
             var barcodeTask = RunWithBudgetAnchor(
                 token => FetchBarcodeAnchor(barcode, token),
                 _openFoodBarcodeSource,
-                BarcodeAnchorBudgetMs,
+                _barcodeAnchorBudgetMs,
                 barcode
             );
 
@@ -193,19 +213,19 @@ public class ConsensusBarcodeService(
             var usdaTask = RunWithBudget(
                 token => FetchUsda(identityQuery, anchor, token),
                 _usdaSource,
-                UsdaBudgetMs,
+                _usdaBudgetMs,
                 identityQuery
             );
             var gtinSearchTask = RunWithBudget(
                 token => FetchGtinSearch(identityQuery, anchor, token),
                 _gtinSearchSource,
-                GtinSearchBudgetMs,
+                _gtinSearchBudgetMs,
                 identityQuery
             );
             var openFoodTask = RunWithBudget(
                 token => FetchOpenFoodSearch(identityQuery, anchor, token),
                 _openFoodSearchSource,
-                OpenFoodBudgetMs,
+                _openFoodBudgetMs,
                 identityQuery
             );
 

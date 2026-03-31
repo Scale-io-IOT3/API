@@ -24,6 +24,17 @@ internal static class SourceSettingsResolver
         );
     }
 
+    public static int ReadTimeoutMs(
+        IConfiguration configuration,
+        string sourceName,
+        string? groupName,
+        int defaultValue
+    )
+    {
+        var timeout = ReadInt(configuration, sourceName, groupName, "TimeoutMs", defaultValue);
+        return Math.Max(100, timeout);
+    }
+
     private static bool IsEnabled(IConfiguration configuration, string sourceName, bool defaultValue)
     {
         var raw = configuration[$"Sources:{sourceName}:Enabled"];

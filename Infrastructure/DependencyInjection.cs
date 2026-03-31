@@ -127,19 +127,19 @@ public static class DependencyInjection
     private static void ConfigureUsdaHttpClient(HttpClient client)
     {
         ConfigureHttpClient(client);
-        client.Timeout = TimeSpan.FromMilliseconds(2500);
+        client.Timeout = TimeSpan.FromMilliseconds(4000);
     }
 
     private static void ConfigureOpenFoodHttpClient(HttpClient client)
     {
         ConfigureHttpClient(client);
-        client.Timeout = TimeSpan.FromMilliseconds(600);
+        client.Timeout = TimeSpan.FromMilliseconds(2000);
     }
 
     private static void ConfigureGtinHttpClient(HttpClient client)
     {
         ConfigureHttpClient(client);
-        client.Timeout = TimeSpan.FromMilliseconds(900);
+        client.Timeout = TimeSpan.FromMilliseconds(6000);
     }
 
     private static AsyncPolicy<HttpResponseMessage> GetRetryPolicy()
