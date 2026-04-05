@@ -70,11 +70,11 @@ public static class DependencyInjection
 
     private static void AddServices(this IServiceCollection services)
     {
-        services.AddScoped<IAuth, Authenticator>();
+        services.AddSingleton<IAuth, Authenticator>();
         services.AddScoped<ITokenHandler, TokenHandler>();
         services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<IBarcodeService, ConsensusBarcodeService>();
-        services.AddScoped<IFreshFoodsService, ConsensusFreshFoodsService>();
+        services.AddSingleton<IBarcodeService, ConsensusBarcodeService>();
+        services.AddSingleton<IFreshFoodsService, ConsensusFreshFoodsService>();
         services.AddScoped<IMealsService, MealServie>();
     }
 

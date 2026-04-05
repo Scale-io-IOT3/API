@@ -7,12 +7,17 @@ using Core.DTO.GtinSearch;
 using Core.DTO.OpenFoodFacts;
 using Core.Interface;
 using Core.Interface.Foods;
+using Infrastructure.Services.Foods.Abstract;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Services.Foods;
 
+/// <summary>
+/// Builds food search results by combining multiple upstream sources into a consensus ranking,
+/// while using stale-while-revalidate caching to keep read latency low.
+/// </summary>
 public class ConsensusFreshFoodsService(
     IClient<FreshFoodResponse> usdaClient,
     IClient<OpenFoodSearchResponse> openFoodClient,
@@ -22,6 +27,7 @@ public class ConsensusFreshFoodsService(
     ILogger<ConsensusFreshFoodsService> logger
 ) : IFreshFoodsService
 {
+    private const int DefaultStaleWhileRevalidateSeconds = 1800;
     private const string Usda = "USDA";
     private const string OpenFoodFacts = "OpenFoodFacts";
     private const string GtinSearch = "GTINSearch";
@@ -32,19 +38,40 @@ public class ConsensusFreshFoodsService(
     private const double OpenFoodReliability = 0.75;
     private const double GtinSearchReliability = 0.65;
 
-    private readonly MemoryCacheEntryOptions _cacheOptions = new()
-    {
-        SlidingExpiration = TimeSpan.FromHours(1),
-        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12)
-    };
-
     private readonly SourceSettings _usdaSource = SourceSettingsResolver.Build(configuration, Usda, true);
     private readonly SourceSettings _openFoodSource = SourceSettingsResolver.Build(configuration, OpenFoodFacts, false);
     private readonly SourceSettings _gtinSource = SourceSettingsResolver.Build(configuration, GtinSearch, true);
+    private readonly ConsensusCacheCoordinator<FoodCacheEntry, RefreshResult> _cacheCoordinator = new(
+        cache,
+        new MemoryCacheEntryOptions
+        {
+            SlidingExpiration = TimeSpan.FromHours(1),
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12)
+        },
+        TimeSpan.FromSeconds(
+            Math.Max(
+                30,
+                SourceSettingsResolver.ReadGlobalInt(
+                    configuration,
+                    "StaleWhileRevalidateSeconds",
+                    DefaultStaleWhileRevalidateSeconds
+                )
+            )
+        ),
+        static entry => entry.RefreshedAtUtc
+    );
     private readonly int _usdaBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, Usda, null, 2200);
     private readonly int _openFoodBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, OpenFoodFacts, null, 1500);
     private readonly int _gtinBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, GtinSearch, null, 4500);
 
+    /// <summary>
+    /// Returns fresh-food search results for the input query.
+    /// Cache hits return immediately; stale hits trigger a background refresh.
+    /// Cache misses run one shared refresh per key (de-duplicated across concurrent callers).
+    /// </summary>
+    /// <param name="input">Raw food query from the client.</param>
+    /// <param name="grams">Requested serving size; defaults to 100g when omitted or invalid.</param>
+    /// <returns>Consensus food response with ranked candidates.</returns>
     public async Task<FoodResponse?> FetchAsync(string input, double? grams = null)
     {
         var normalizedQuery = Normalize(input);
@@ -60,77 +87,51 @@ public class ConsensusFreshFoodsService(
         }
 
         var key = $"fresh_consensus_{normalizedQuery}";
-        var cacheHit = cache.TryGetValue(key, out List<ConsensusFood>? consensusFoods) && consensusFoods is not null;
+        var cacheHit = false;
+        var staleServed = false;
 
         long usdaLatency = 0;
         long openFoodLatency = 0;
         long gtinLatency = 0;
         var activeSources = 0;
+        FoodCacheEntry? cacheEntry = null;
 
-        if (!cacheHit)
+        if (_cacheCoordinator.TryGet(key, out FoodCacheEntry? cached, out var isStale) && cached is not null)
         {
-            var usdaTask = SourceCallExecutor.ExecuteWithBudget(
-                token => FetchUsda(normalizedQuery, token),
-                _usdaSource,
-                _usdaBudgetMs,
-                normalizedQuery,
-                logger,
-                "consensus search",
-                timeoutMs => new SourceCandidates([], timeoutMs),
-                () => new SourceCandidates([], 0)
+            cacheHit = true;
+            cacheEntry = cached;
+            activeSources = cached.ActiveSources;
+
+            if (isStale)
+            {
+                staleServed = true;
+                _ = RefreshInBackgroundAsync(key, normalizedQuery);
+            }
+        }
+        else
+        {
+            var refresh = await _cacheCoordinator.RunSharedRefreshAsync(
+                key,
+                () => FetchAndCacheAsync(key, normalizedQuery)
             );
-            var gtinTask = SourceCallExecutor.ExecuteWithBudget(
-                token => FetchGtinSearch(normalizedQuery, token),
-                _gtinSource,
-                _gtinBudgetMs,
-                normalizedQuery,
-                logger,
-                "consensus search",
-                timeoutMs => new SourceCandidates([], timeoutMs),
-                () => new SourceCandidates([], 0)
-            );
-            var openFoodTask = SourceCallExecutor.ExecuteWithBudget(
-                token => FetchOpenFood(normalizedQuery, token),
-                _openFoodSource,
-                _openFoodBudgetMs,
-                normalizedQuery,
-                logger,
-                "consensus search",
-                timeoutMs => new SourceCandidates([], timeoutMs),
-                () => new SourceCandidates([], 0)
-            );
-
-            await Task.WhenAll(usdaTask, gtinTask, openFoodTask);
-            var usda = await usdaTask;
-            var gtin = await gtinTask;
-            var openFood = await openFoodTask;
-
-            usdaLatency = usda.LatencyMs;
-            openFoodLatency = openFood.LatencyMs;
-            gtinLatency = gtin.LatencyMs;
-
-            var candidates = usda.Candidates
-                .Concat(openFood.Candidates)
-                .Concat(gtin.Candidates)
-                .ToList();
-            activeSources += usda.Candidates.Count > 0 ? 1 : 0;
-            activeSources += openFood.Candidates.Count > 0 ? 1 : 0;
-            activeSources += gtin.Candidates.Count > 0 ? 1 : 0;
-
-            consensusFoods = BuildConsensus(candidates, normalizedQuery, activeSources);
-            cache.Set(key, consensusFoods, _cacheOptions);
+            cacheEntry = refresh.Entry;
+            usdaLatency = refresh.UsdaLatencyMs;
+            openFoodLatency = refresh.OpenFoodLatencyMs;
+            gtinLatency = refresh.GtinLatencyMs;
+            activeSources = refresh.Entry.ActiveSources;
         }
 
         var gramsValue = grams is null or <= 0 ? 100.0 : grams.Value;
-        var foods = consensusFoods!
+        var foods = cacheEntry!.Foods
             .Select(c => ToDto(c, gramsValue))
             .ToArray();
 
         logger.LogInformation(
-            "Consensus search completed. query='{Query}', normalized='{Normalized}', cache_hit={CacheHit}, usda_latency_ms={UsdaLatency}, openfood_latency_ms={OpenFoodLatency}, gtin_latency_ms={GtinLatency}, active_sources={ActiveSources}, results={ResultCount}",
+            "Consensus search completed. query='{Query}', normalized='{Normalized}', cache_hit={CacheHit}, stale_served={StaleServed}, usda_latency_ms={UsdaLatency}, openfood_latency_ms={OpenFoodLatency}, gtin_latency_ms={GtinLatency}, active_sources={ActiveSources}, results={ResultCount}",
             input,
             normalizedQuery,
             cacheHit,
+            staleServed,
             usdaLatency,
             openFoodLatency,
             gtinLatency,
@@ -141,6 +142,130 @@ public class ConsensusFreshFoodsService(
         return new FoodResponse { Foods = foods };
     }
 
+    /// <summary>
+    /// Schedules a non-blocking refresh for stale cache entries.
+    /// Failures are logged without affecting the already-served response.
+    /// </summary>
+    /// <param name="key">Cache key for this normalized query.</param>
+    /// <param name="normalizedQuery">Normalized query sent to sources.</param>
+    private async Task RefreshInBackgroundAsync(string key, string normalizedQuery)
+    {
+        try
+        {
+            await _cacheCoordinator.RunSharedRefreshAsync(
+                key,
+                () => FetchAndCacheAsync(key, normalizedQuery)
+            );
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Consensus background refresh failed. normalized_query='{Query}'",
+                normalizedQuery
+            );
+        }
+    }
+
+    /// <summary>
+    /// Fetches all configured sources in parallel and writes the resulting consensus entry to cache.
+    /// If the new consensus is empty, keeps the last non-empty cached value to avoid regressions.
+    /// </summary>
+    /// <param name="key">Cache key for this normalized query.</param>
+    /// <param name="normalizedQuery">Normalized query sent to upstream sources.</param>
+    /// <returns>Refresh payload containing the cached entry and source latencies.</returns>
+    private async Task<RefreshResult> FetchAndCacheAsync(string key, string normalizedQuery)
+    {
+        var usdaTask = RunWithBudget(
+            token => FetchUsda(normalizedQuery, token),
+            _usdaSource,
+            _usdaBudgetMs,
+            normalizedQuery
+        );
+        var gtinTask = RunWithBudget(
+            token => FetchGtinSearch(normalizedQuery, token),
+            _gtinSource,
+            _gtinBudgetMs,
+            normalizedQuery
+        );
+        var openFoodTask = RunWithBudget(
+            token => FetchOpenFood(normalizedQuery, token),
+            _openFoodSource,
+            _openFoodBudgetMs,
+            normalizedQuery
+        );
+
+        await Task.WhenAll(usdaTask, gtinTask, openFoodTask);
+        var usda = await usdaTask;
+        var gtin = await gtinTask;
+        var openFood = await openFoodTask;
+
+        var candidates = usda.Candidates
+            .Concat(openFood.Candidates)
+            .Concat(gtin.Candidates)
+            .ToList();
+        var activeSources = 0;
+        activeSources += usda.Candidates.Count > 0 ? 1 : 0;
+        activeSources += openFood.Candidates.Count > 0 ? 1 : 0;
+        activeSources += gtin.Candidates.Count > 0 ? 1 : 0;
+
+        var consensusFoods = BuildConsensus(candidates, normalizedQuery, activeSources);
+        var entry = new FoodCacheEntry(consensusFoods, activeSources, DateTimeOffset.UtcNow);
+
+        if (entry.Foods.Count == 0 &&
+            _cacheCoordinator.TryGetExisting(key, out FoodCacheEntry? existing) &&
+            existing is not null &&
+            existing.Foods.Count > 0)
+        {
+            var preserved = existing with { RefreshedAtUtc = DateTimeOffset.UtcNow };
+            _cacheCoordinator.Set(key, preserved);
+            return new RefreshResult(
+                preserved,
+                usda.LatencyMs,
+                openFood.LatencyMs,
+                gtin.LatencyMs
+            );
+        }
+
+        _cacheCoordinator.Set(key, entry);
+        return new RefreshResult(
+            entry,
+            usda.LatencyMs,
+            openFood.LatencyMs,
+            gtin.LatencyMs
+        );
+    }
+
+    /// <summary>
+    /// Wraps a source call with timeout budget, failure handling, and temporary source blocking.
+    /// </summary>
+    /// <param name="sourceCall">Source invocation.</param>
+    /// <param name="source">Source settings and circuit state metadata.</param>
+    /// <param name="timeoutMs">Per-call timeout budget in milliseconds.</param>
+    /// <param name="query">Query used for diagnostics.</param>
+    /// <returns>Source candidates with measured latency.</returns>
+    private async Task<SourceCandidates> RunWithBudget(
+        Func<CancellationToken, Task<SourceCandidates>> sourceCall,
+        SourceSettings source,
+        int timeoutMs,
+        string query
+    )
+    {
+        return await SourceCallExecutor.ExecuteWithBudget(
+            sourceCall,
+            source,
+            timeoutMs,
+            query,
+            logger,
+            "consensus search",
+            timeout => new SourceCandidates([], timeout),
+            () => new SourceCandidates([], 0)
+        );
+    }
+
+    /// <summary>
+    /// Queries USDA and maps response items into normalized consensus candidates.
+    /// </summary>
     private async Task<SourceCandidates> FetchUsda(string normalizedQuery, CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
@@ -162,6 +287,9 @@ public class ConsensusFreshFoodsService(
         return new SourceCandidates(candidates, sw.ElapsedMilliseconds);
     }
 
+    /// <summary>
+    /// Queries OpenFoodFacts search and maps response items into normalized consensus candidates.
+    /// </summary>
     private async Task<SourceCandidates> FetchOpenFood(string normalizedQuery, CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
@@ -183,6 +311,9 @@ public class ConsensusFreshFoodsService(
         return new SourceCandidates(candidates, sw.ElapsedMilliseconds);
     }
 
+    /// <summary>
+    /// Queries GTINSearch text endpoint and maps response items into normalized consensus candidates.
+    /// </summary>
     private async Task<SourceCandidates> FetchGtinSearch(string normalizedQuery, CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
@@ -342,7 +473,7 @@ public class ConsensusFreshFoodsService(
                 {
                     var direct = keys.Contains(prop.Name) && prop.Value.ValueKind == System.Text.Json.JsonValueKind.String
                         ? new[] { prop.Value.GetString() }
-                        : Array.Empty<string?>();
+                        : [];
                     var nested = ExtractText(prop.Value, keys);
                     return direct.Append(nested);
                 })
@@ -386,7 +517,7 @@ public class ConsensusFreshFoodsService(
                 {
                     var direct = keys.Contains(prop.Name)
                         ? new[] { ParseNumber(prop.Value) }
-                        : Array.Empty<double?>();
+                        : [];
                     var nested = ExtractNumber(prop.Value, keys);
                     return direct.Append(nested);
                 })
@@ -460,6 +591,13 @@ public class ConsensusFreshFoodsService(
                candidate.Proteins <= 120;
     }
 
+    /// <summary>
+    /// Clusters source candidates and converts each cluster into a scored consensus item.
+    /// </summary>
+    /// <param name="candidates">Raw source candidates for the query.</param>
+    /// <param name="query">Normalized query (reserved for tuning and diagnostics).</param>
+    /// <param name="activeSources">Number of sources that produced at least one candidate.</param>
+    /// <returns>Top consensus items ordered by relevance.</returns>
     private static List<ConsensusFood> BuildConsensus(List<Candidate> candidates, string query, int activeSources)
     {
         if (candidates.Count == 0)
@@ -479,6 +617,9 @@ public class ConsensusFreshFoodsService(
         return consensus;
     }
 
+    /// <summary>
+    /// Groups likely-identical foods using name/brand token similarity.
+    /// </summary>
     private static List<List<Candidate>> Cluster(List<Candidate> candidates)
     {
         var groups = new List<List<Candidate>>();
@@ -513,6 +654,9 @@ public class ConsensusFreshFoodsService(
         return groups;
     }
 
+    /// <summary>
+    /// Produces one consensus item from a cluster of matching source candidates.
+    /// </summary>
     private static ConsensusFood? BuildConsensus(List<Candidate> group, int activeSources)
     {
         if (group.Count == 0)
@@ -547,6 +691,9 @@ public class ConsensusFreshFoodsService(
         );
     }
 
+    /// <summary>
+    /// Aggregates nutrient values with outlier rejection and weighted median to improve robustness.
+    /// </summary>
     private static AggregateResult Aggregate(List<(double Value, double Weight)> values)
     {
         if (values.Count == 0)
@@ -561,11 +708,11 @@ public class ConsensusFreshFoodsService(
 
         var filtered = mad <= 0
             ? values
-            : values.Where(item =>
+            : [.. values.Where(item =>
             {
                 var robustZ = 0.6745 * (item.Value - median) / mad;
                 return Math.Abs(robustZ) <= 3.5;
-            }).ToList();
+            })];
 
         if (filtered.Count == 0)
         {
@@ -625,6 +772,9 @@ public class ConsensusFreshFoodsService(
         return dto;
     }
 
+    /// <summary>
+    /// Heuristic query-to-name quality used to prioritize and weight candidates.
+    /// </summary>
     private static double MatchQuality(string normalizedQuery, string normalizedName)
     {
         if (string.IsNullOrWhiteSpace(normalizedQuery) || string.IsNullOrWhiteSpace(normalizedName))
@@ -651,6 +801,9 @@ public class ConsensusFreshFoodsService(
         return Math.Max(0.2, 0.2 + similarity * 0.6);
     }
 
+    /// <summary>
+    /// Jaccard similarity over tokenized strings.
+    /// </summary>
     private static double TokenSimilarity(string left, string right)
     {
         if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
@@ -728,6 +881,13 @@ public class ConsensusFreshFoodsService(
 
     private sealed record AggregateResult(double Value, double NormalizedMad);
     private sealed record SourceCandidates(List<Candidate> Candidates, long LatencyMs);
+    private sealed record FoodCacheEntry(List<ConsensusFood> Foods, int ActiveSources, DateTimeOffset RefreshedAtUtc);
+    private sealed record RefreshResult(
+        FoodCacheEntry Entry,
+        long UsdaLatencyMs,
+        long OpenFoodLatencyMs,
+        long GtinLatencyMs
+    );
 
     private sealed record ConsensusFood(
         string Name,
