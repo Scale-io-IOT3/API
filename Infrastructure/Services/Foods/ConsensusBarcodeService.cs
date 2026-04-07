@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Collections.Concurrent;
 using Core.DTO.Barcodes;
 using Core.DTO.Foods;
 using Core.DTO.FreshFoods;
@@ -49,6 +50,7 @@ public class ConsensusBarcodeService(
     private const double GtinSearchReliability = 0.65;
     private const double MinIdentitySimilarity = 0.52;
     private const double MinMetadataSimilarity = 0.6;
+    private const string BarcodeMetadataCachePrefix = "openfood_metadata_barcode_";
 
     private readonly SourceSettings _openFoodBarcodeSource = SourceSettingsResolver.Build(
         configuration,
@@ -119,6 +121,17 @@ public class ConsensusBarcodeService(
         "GTINSearch",
         4500
     );
+    private readonly ConcurrentDictionary<string, Lazy<Task<OpenFoodMetadata?>>> _metadataInFlight = new(StringComparer.Ordinal);
+    private readonly MemoryCacheEntryOptions _metadataHitCacheOptions = new()
+    {
+        SlidingExpiration = TimeSpan.FromHours(1),
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12)
+    };
+    private readonly MemoryCacheEntryOptions _metadataMissCacheOptions = new()
+    {
+        SlidingExpiration = TimeSpan.FromMinutes(5),
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(20)
+    };
 
     private static readonly HashSet<string> NameKeys = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -340,12 +353,6 @@ public class ConsensusBarcodeService(
             _usdaBudgetMs,
             identityQuery
         );
-        var gtinSearchTask = RunWithBudget(
-            token => FetchGtinSearch(identityQuery, anchor, token),
-            _gtinSearchSource,
-            _gtinSearchBudgetMs,
-            identityQuery
-        );
         var openFoodTask = RunWithBudget(
             token => FetchOpenFoodSearch(identityQuery, anchor, token),
             _openFoodSearchSource,
@@ -353,10 +360,23 @@ public class ConsensusBarcodeService(
             identityQuery
         );
 
-        await Task.WhenAll(usdaTask, gtinSearchTask, openFoodTask);
+        await Task.WhenAll(usdaTask, openFoodTask);
         var usda = await usdaTask;
-        var gtinSearch = await gtinSearchTask;
         var openFood = await openFoodTask;
+        SourceCandidates gtinSearch;
+        if (ShouldQueryGtinSearch(anchor, usda, openFood, gtinBarcode))
+        {
+            gtinSearch = await RunWithBudget(
+                token => FetchGtinSearch(identityQuery, anchor, token),
+                _gtinSearchSource,
+                _gtinSearchBudgetMs,
+                identityQuery
+            );
+        }
+        else
+        {
+            gtinSearch = new SourceCandidates([], 0);
+        }
 
         var candidates = new List<Candidate> { anchor };
         candidates.AddRange(gtinBarcode.RawCandidates
@@ -824,6 +844,26 @@ public class ConsensusBarcodeService(
         );
     }
 
+    private static bool ShouldQueryGtinSearch(
+        Candidate anchor,
+        SourceCandidates usda,
+        SourceCandidates openFood,
+        RawSourceCandidates gtinBarcode
+    )
+    {
+        if (anchor.HasNutrition)
+        {
+            return false;
+        }
+
+        var supportSignals = 0;
+        supportSignals += usda.Candidates.Count > 0 ? 1 : 0;
+        supportSignals += openFood.Candidates.Count > 0 ? 1 : 0;
+        supportSignals += gtinBarcode.RawCandidates.Count > 0 ? 1 : 0;
+
+        return supportSignals < 2;
+    }
+
     /// <summary>
     /// Aggregates a nutrient channel with robust outlier filtering and weighted median.
     /// </summary>
@@ -917,23 +957,80 @@ public class ConsensusBarcodeService(
             return;
         }
 
+        var metadata = await GetOrFetchCachedBarcodeMetadataAsync(food, barcode);
+        if (metadata is null)
+        {
+            return;
+        }
+
+        var resolvedGrade = NutritionGrade.Normalize(metadata.Grade);
+        if (needsGrade && resolvedGrade is not null)
+        {
+            food.Grade = resolvedGrade;
+        }
+
+        if (needsNutrientLevels && metadata.NutrientLevels is not null && metadata.NutrientLevels.Count > 0)
+        {
+            food.NutrientLevels = CloneNutrientLevels(metadata.NutrientLevels);
+        }
+    }
+
+    private async Task<OpenFoodMetadata?> GetOrFetchCachedBarcodeMetadataAsync(FoodDto food, string barcode)
+    {
+        var cacheKey = $"{BarcodeMetadataCachePrefix}{barcode}";
+        if (cache.TryGetValue(cacheKey, out OpenFoodMetadataCacheEntry? cached) && cached is not null)
+        {
+            return cached.Metadata;
+        }
+
+        var lazy = _metadataInFlight.GetOrAdd(
+            cacheKey,
+            _ => new Lazy<Task<OpenFoodMetadata?>>(
+                async () =>
+                {
+                    var metadata = await FetchBarcodeMetadataAsync(food, barcode);
+                    var entry = new OpenFoodMetadataCacheEntry(metadata);
+                    cache.Set(cacheKey, entry, metadata is null ? _metadataMissCacheOptions : _metadataHitCacheOptions);
+                    return metadata;
+                },
+                LazyThreadSafetyMode.ExecutionAndPublication
+            )
+        );
+
+        Task<OpenFoodMetadata?> metadataTask;
+        try
+        {
+            metadataTask = lazy.Value;
+        }
+        catch
+        {
+            _metadataInFlight.TryRemove(new KeyValuePair<string, Lazy<Task<OpenFoodMetadata?>>>(cacheKey, lazy));
+            throw;
+        }
+
+        try
+        {
+            return await metadataTask;
+        }
+        finally
+        {
+            _metadataInFlight.TryRemove(new KeyValuePair<string, Lazy<Task<OpenFoodMetadata?>>>(cacheKey, lazy));
+        }
+    }
+
+    private async Task<OpenFoodMetadata?> FetchBarcodeMetadataAsync(FoodDto food, string barcode)
+    {
+        OpenFoodMetadata? barcodeMetadata = null;
         try
         {
             var barcodeResponse = await barcodeClient.Fetch(barcode);
             var product = barcodeResponse?.Product;
             if (product is not null)
             {
-                if (needsGrade)
-                {
-                    food.Grade = product.ResolvedNutritionGrade;
-                    needsGrade = NutritionGrade.Normalize(food.Grade) is null;
-                }
-
-                if (needsNutrientLevels)
-                {
-                    food.NutrientLevels = product.ResolvedNutrientLevels;
-                    needsNutrientLevels = food.NutrientLevels is null || food.NutrientLevels.Count == 0;
-                }
+                barcodeMetadata = new OpenFoodMetadata(
+                    NutritionGrade.Normalize(product.ResolvedNutritionGrade),
+                    product.ResolvedNutrientLevels
+                );
             }
         }
         catch (Exception ex)
@@ -946,26 +1043,30 @@ public class ConsensusBarcodeService(
             );
         }
 
-        if (!needsGrade && !needsNutrientLevels)
+        var hasGrade = NutritionGrade.Normalize(barcodeMetadata?.Grade) is not null;
+        var hasNutrientLevels = barcodeMetadata?.NutrientLevels is not null && barcodeMetadata.NutrientLevels.Count > 0;
+        if (hasGrade && hasNutrientLevels)
         {
-            return;
+            return barcodeMetadata;
         }
 
-        var metadata = await FetchBestOpenFoodMetadataAsync(food);
-        if (metadata is null)
+        var fallback = await FetchBestOpenFoodMetadataAsync(food);
+        if (fallback is null)
         {
-            return;
+            return hasGrade || hasNutrientLevels ? barcodeMetadata : null;
         }
 
-        if (needsGrade)
+        var grade = hasGrade ? NutritionGrade.Normalize(barcodeMetadata!.Grade) : NutritionGrade.Normalize(fallback.Grade);
+        var nutrientLevels = hasNutrientLevels
+            ? CloneNutrientLevels(barcodeMetadata!.NutrientLevels)
+            : CloneNutrientLevels(fallback.NutrientLevels);
+
+        if (grade is null && (nutrientLevels is null || nutrientLevels.Count == 0))
         {
-            food.Grade = metadata.Grade;
+            return null;
         }
 
-        if (needsNutrientLevels)
-        {
-            food.NutrientLevels = CloneNutrientLevels(metadata.NutrientLevels);
-        }
+        return new OpenFoodMetadata(grade, nutrientLevels);
     }
 
     private async Task<OpenFoodMetadata?> FetchBestOpenFoodMetadataAsync(FoodDto food)
@@ -1424,6 +1525,7 @@ public class ConsensusBarcodeService(
         string? Grade,
         Dictionary<string, string>? NutrientLevels
     );
+    private sealed record OpenFoodMetadataCacheEntry(OpenFoodMetadata? Metadata);
 
     private sealed record AggregateResult(double Value, double NormalizedMad);
     private sealed record SourceCandidates(List<Candidate> Candidates, long LatencyMs);

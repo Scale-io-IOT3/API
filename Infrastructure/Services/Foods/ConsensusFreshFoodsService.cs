@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Collections.Concurrent;
 using Core.DTO.Foods;
 using Core.DTO.FreshFoods;
 using Core.DTO.GtinSearch;
@@ -35,10 +36,12 @@ public class ConsensusFreshFoodsService(
     private const int MaxSourceCandidates = 25;
     private const int MaxResults = 10;
     private const int MinQueryLength = 2;
+    private const int MinPrimaryCandidatesForFastPath = 4;
     private const double UsdaReliability = 0.95;
     private const double OpenFoodReliability = 0.75;
     private const double GtinSearchReliability = 0.65;
     private const double MinMetadataSimilarity = 0.6;
+    private const int DefaultMetadataMaxParallelism = 4;
 
     private readonly SourceSettings _usdaSource = SourceSettingsResolver.Build(configuration, Usda, true);
     private readonly SourceSettings _openFoodSource = SourceSettingsResolver.Build(configuration, OpenFoodFacts, false);
@@ -65,6 +68,22 @@ public class ConsensusFreshFoodsService(
     private readonly int _usdaBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, Usda, null, 2200);
     private readonly int _openFoodBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, OpenFoodFacts, null, 1500);
     private readonly int _gtinBudgetMs = SourceSettingsResolver.ReadTimeoutMs(configuration, GtinSearch, null, 4500);
+    private readonly int _metadataMaxParallelism = Math.Clamp(
+        SourceSettingsResolver.ReadGlobalInt(configuration, "MetadataMaxParallelism", DefaultMetadataMaxParallelism),
+        1,
+        8
+    );
+    private readonly ConcurrentDictionary<string, Lazy<Task<OpenFoodMetadata?>>> _metadataInFlight = new(StringComparer.Ordinal);
+    private readonly MemoryCacheEntryOptions _metadataHitCacheOptions = new()
+    {
+        SlidingExpiration = TimeSpan.FromHours(1),
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12)
+    };
+    private readonly MemoryCacheEntryOptions _metadataMissCacheOptions = new()
+    {
+        SlidingExpiration = TimeSpan.FromMinutes(5),
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(20)
+    };
 
     /// <summary>
     /// Returns fresh-food search results for the input query.
@@ -185,12 +204,6 @@ public class ConsensusFreshFoodsService(
             _usdaBudgetMs,
             normalizedQuery
         );
-        var gtinTask = RunWithBudget(
-            token => FetchGtinSearch(normalizedQuery, token),
-            _gtinSource,
-            _gtinBudgetMs,
-            normalizedQuery
-        );
         var openFoodTask = RunWithBudget(
             token => FetchOpenFood(normalizedQuery, token),
             _openFoodSource,
@@ -198,10 +211,23 @@ public class ConsensusFreshFoodsService(
             normalizedQuery
         );
 
-        await Task.WhenAll(usdaTask, gtinTask, openFoodTask);
+        await Task.WhenAll(usdaTask, openFoodTask);
         var usda = await usdaTask;
-        var gtin = await gtinTask;
         var openFood = await openFoodTask;
+        SourceCandidates gtin;
+        if (ShouldQueryGtin(usda, openFood))
+        {
+            gtin = await RunWithBudget(
+                token => FetchGtinSearch(normalizedQuery, token),
+                _gtinSource,
+                _gtinBudgetMs,
+                normalizedQuery
+            );
+        }
+        else
+        {
+            gtin = new SourceCandidates([], 0);
+        }
 
         var candidates = usda.Candidates
             .Concat(openFood.Candidates)
@@ -237,6 +263,12 @@ public class ConsensusFreshFoodsService(
             openFood.LatencyMs,
             gtin.LatencyMs
         );
+    }
+
+    private static bool ShouldQueryGtin(SourceCandidates usda, SourceCandidates openFood)
+    {
+        var primaryCount = usda.Candidates.Count + openFood.Candidates.Count;
+        return primaryCount < MinPrimaryCandidatesForFastPath;
     }
 
     /// <summary>
@@ -789,10 +821,7 @@ public class ConsensusFreshFoodsService(
     private async Task ResolveMissingOpenFoodMetadataAsync(FoodDto[] foods)
     {
         var missing = foods
-            .Where(food =>
-                NutritionGrade.Normalize(food.Grade) is null ||
-                food.NutrientLevels is null ||
-                food.NutrientLevels.Count == 0)
+            .Where(NeedsMetadata)
             .ToArray();
 
         if (missing.Length == 0)
@@ -800,23 +829,111 @@ public class ConsensusFreshFoodsService(
             return;
         }
 
-        foreach (var food in missing)
+        using var semaphore = new SemaphoreSlim(_metadataMaxParallelism, _metadataMaxParallelism);
+        var tasks = missing
+            .GroupBy(BuildMetadataIdentityKey, StringComparer.Ordinal)
+            .Where(group => !string.IsNullOrWhiteSpace(group.Key))
+            .Select(async group =>
+            {
+                await semaphore.WaitAsync();
+                try
+                {
+                    var metadata = await GetOrFetchCachedMetadataAsync(group.Key, group.First());
+                    if (metadata is null)
+                    {
+                        return;
+                    }
+
+                    foreach (var food in group)
+                    {
+                        ApplyMetadata(food, metadata);
+                    }
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task<OpenFoodMetadata?> GetOrFetchCachedMetadataAsync(string identityKey, FoodDto food)
+    {
+        var cacheKey = $"openfood_metadata_search_{identityKey}";
+        if (cache.TryGetValue(cacheKey, out OpenFoodMetadataCacheEntry? cached) && cached is not null)
         {
-            var resolved = await FetchBestOpenFoodMetadataAsync(food);
-            if (resolved is null)
-            {
-                continue;
-            }
+            return cached.Metadata;
+        }
 
-            if (NutritionGrade.Normalize(food.Grade) is null)
-            {
-                food.Grade = resolved.Grade;
-            }
+        var lazy = _metadataInFlight.GetOrAdd(
+            cacheKey,
+            _ => new Lazy<Task<OpenFoodMetadata?>>(
+                async () =>
+                {
+                    var metadata = await FetchBestOpenFoodMetadataAsync(food);
+                    var entry = new OpenFoodMetadataCacheEntry(metadata);
+                    cache.Set(cacheKey, entry, metadata is null ? _metadataMissCacheOptions : _metadataHitCacheOptions);
+                    return metadata;
+                },
+                LazyThreadSafetyMode.ExecutionAndPublication
+            )
+        );
 
-            if (food.NutrientLevels is null || food.NutrientLevels.Count == 0)
-            {
-                food.NutrientLevels = CloneNutrientLevels(resolved.NutrientLevels);
-            }
+        Task<OpenFoodMetadata?> metadataTask;
+        try
+        {
+            metadataTask = lazy.Value;
+        }
+        catch
+        {
+            _metadataInFlight.TryRemove(new KeyValuePair<string, Lazy<Task<OpenFoodMetadata?>>>(cacheKey, lazy));
+            throw;
+        }
+
+        try
+        {
+            return await metadataTask;
+        }
+        finally
+        {
+            _metadataInFlight.TryRemove(new KeyValuePair<string, Lazy<Task<OpenFoodMetadata?>>>(cacheKey, lazy));
+        }
+    }
+
+    private static string BuildMetadataIdentityKey(FoodDto food)
+    {
+        var normalizedName = Normalize(food.Name);
+        if (string.IsNullOrWhiteSpace(normalizedName))
+        {
+            return string.Empty;
+        }
+
+        var normalizedBrand = Normalize(food.Brands);
+        return $"{normalizedBrand}|{normalizedName}";
+    }
+
+    private static bool NeedsMetadata(FoodDto food)
+    {
+        return NutritionGrade.Normalize(food.Grade) is null ||
+               food.NutrientLevels is null ||
+               food.NutrientLevels.Count == 0;
+    }
+
+    private static void ApplyMetadata(FoodDto food, OpenFoodMetadata metadata)
+    {
+        var normalizedCurrentGrade = NutritionGrade.Normalize(food.Grade);
+        var normalizedResolvedGrade = NutritionGrade.Normalize(metadata.Grade);
+        if (normalizedCurrentGrade is null && normalizedResolvedGrade is not null)
+        {
+            food.Grade = normalizedResolvedGrade;
+        }
+
+        if ((food.NutrientLevels is null || food.NutrientLevels.Count == 0) &&
+            metadata.NutrientLevels is not null &&
+            metadata.NutrientLevels.Count > 0)
+        {
+            food.NutrientLevels = CloneNutrientLevels(metadata.NutrientLevels);
         }
     }
 
@@ -1050,6 +1167,7 @@ public class ConsensusFreshFoodsService(
         string? Grade,
         Dictionary<string, string>? NutrientLevels
     );
+    private sealed record OpenFoodMetadataCacheEntry(OpenFoodMetadata? Metadata);
 
     private sealed record AggregateResult(double Value, double NormalizedMad);
     private sealed record SourceCandidates(List<Candidate> Candidates, long LatencyMs);
