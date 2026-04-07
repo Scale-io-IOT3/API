@@ -34,4 +34,4 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dev
 WORKDIR /app
 
 COPY . .
-ENTRYPOINT ["dotnet", "watch", "run", "--project", "API/API.csproj", "--urls", "http://0.0.0.0:8080"]
+ENTRYPOINT ["dotnet", "watch", "--non-interactive", "--project", "API/API.csproj", "run", "--urls", "http://0.0.0.0:8080"]

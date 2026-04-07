@@ -18,7 +18,7 @@ public class FreshFood
 
     public Nutrient[] GetMacros()
     {
-        return FoodNutrients.Where(IsMacro).ToArray();
+        return [.. FoodNutrients.Where(IsMacro)];
     }
 
     private static bool IsMacro(Nutrient n)

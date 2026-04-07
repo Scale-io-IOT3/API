@@ -56,6 +56,8 @@ public static class DependencyInjection
             .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
         services.AddHttpClient<IClient<OpenFoodSearchResponse>, OpenFoodSearchClient>(ConfigureOpenFoodHttpClient)
             .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
+        services.AddHttpClient<IClient<OpenFoodSearchALiciousResponse>, OpenFoodSearchALiciousClient>(ConfigureOpenFoodHttpClient)
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
         services.AddHttpClient<IGtinSearchClient, GtinSearchClient>(ConfigureGtinHttpClient)
             .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
     }
@@ -70,11 +72,11 @@ public static class DependencyInjection
 
     private static void AddServices(this IServiceCollection services)
     {
-        services.AddScoped<IAuth, Authenticator>();
+        services.AddSingleton<IAuth, Authenticator>();
         services.AddScoped<ITokenHandler, TokenHandler>();
         services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<IBarcodeService, ConsensusBarcodeService>();
-        services.AddScoped<IFreshFoodsService, ConsensusFreshFoodsService>();
+        services.AddSingleton<IBarcodeService, ConsensusBarcodeService>();
+        services.AddSingleton<IFreshFoodsService, ConsensusFreshFoodsService>();
         services.AddScoped<IMealsService, MealServie>();
     }
 

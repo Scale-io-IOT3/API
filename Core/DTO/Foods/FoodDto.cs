@@ -14,6 +14,8 @@ public class FoodDto
     [JsonPropertyName("calories")] public int Calories => MacrosDto.Calories;
     [JsonPropertyName("quantity")] public double Quantity { get; set; }
     [JsonPropertyName("macros")] public MacrosDto MacrosDto => HiddenMacrosDto;
+    [JsonPropertyName("grade")] public string? Grade { get; set; }
+    [JsonPropertyName("nutrient_levels")] public Dictionary<string, string>? NutrientLevels { get; set; }
     [JsonPropertyName("confidence")] public double? Confidence { get; set; }
     [JsonPropertyName("sources_used")] public string[] SourcesUsed { get; set; } = [];
 
@@ -34,7 +36,9 @@ public class FoodDto
         {
             Brands = food.ResolvedBrand,
             HiddenName = food.ResolvedName,
-            HiddenMacrosDto = food.ResolvedMacros
+            HiddenMacrosDto = food.ResolvedMacros,
+            Grade = food.ResolvedNutritionGrade,
+            NutrientLevels = food.ResolvedNutrientLevels,
         };
     }
 

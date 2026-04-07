@@ -35,6 +35,12 @@ internal static class SourceSettingsResolver
         return Math.Max(100, timeout);
     }
 
+    public static int ReadGlobalInt(IConfiguration configuration, string setting, int defaultValue)
+    {
+        var raw = configuration[$"Sources:Global:{setting}"];
+        return int.TryParse(raw, out var parsed) ? parsed : defaultValue;
+    }
+
     private static bool IsEnabled(IConfiguration configuration, string sourceName, bool defaultValue)
     {
         var raw = configuration[$"Sources:{sourceName}:Enabled"];

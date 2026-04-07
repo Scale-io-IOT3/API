@@ -11,6 +11,11 @@ public class Product
     [JsonPropertyName("product_name_fr")] public string? NameFr { get; set; }
     [JsonPropertyName("generic_name")] public string? GenericName { get; set; }
     [JsonPropertyName("generic_name_en")] public string? GenericNameEn { get; set; }
+    [JsonPropertyName("nutriscore_grade")] public string? NutriScoreGrade { get; set; }
+    [JsonPropertyName("nutrition_grades")] public string? NutritionGrades { get; set; }
+    [JsonPropertyName("nutrition_grade_fr")] public string? NutritionGradeFr { get; set; }
+    [JsonPropertyName("nutrition_grades_tags")] public string[]? NutritionGradesTags { get; set; }
+    [JsonPropertyName("nutrient_levels")] public Dictionary<string, string>? NutrientLevels { get; set; }
     [JsonPropertyName("nutriments")] public BarcodeNutriments? Nutriments { get; set; }
 
     [JsonIgnore] public string ResolvedBrand => Brands?.Trim() ?? string.Empty;
@@ -19,6 +24,18 @@ public class Product
     public string ResolvedName => FirstNonEmpty(Name, NameEn, NameFr, GenericName, GenericNameEn);
 
     [JsonIgnore] public MacrosDto ResolvedMacros => Nutriments?.ToMacrosDto() ?? MacrosDto.From(0, 0, 0, 0);
+    [JsonIgnore]
+    public string? ResolvedNutritionGrade => NutritionGrade.Normalize(
+        NutriScoreGrade,
+        NutritionGrades,
+        NutritionGradeFr,
+        NutritionGradesTags?.FirstOrDefault()
+    );
+    [JsonIgnore]
+    public Dictionary<string, string>? ResolvedNutrientLevels =>
+        NutrientLevels?.Count > 0
+            ? NutrientLevels.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase)
+            : null;
 
     private static string FirstNonEmpty(params string?[] values)
     {
