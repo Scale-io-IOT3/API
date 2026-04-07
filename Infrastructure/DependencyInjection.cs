@@ -56,6 +56,8 @@ public static class DependencyInjection
             .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
         services.AddHttpClient<IClient<OpenFoodSearchResponse>, OpenFoodSearchClient>(ConfigureOpenFoodHttpClient)
             .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
+        services.AddHttpClient<IClient<OpenFoodSearchALiciousResponse>, OpenFoodSearchALiciousClient>(ConfigureOpenFoodHttpClient)
+            .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
         services.AddHttpClient<IGtinSearchClient, GtinSearchClient>(ConfigureGtinHttpClient)
             .AddPolicyHandler(GetSourceCircuitBreakerPolicy());
     }

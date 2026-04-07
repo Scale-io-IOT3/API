@@ -16,6 +16,7 @@ public class OpenFoodSearchProduct
     [JsonPropertyName("nutrition_grades")] public string? NutritionGrades { get; init; }
     [JsonPropertyName("nutrition_grade_fr")] public string? NutritionGradeFr { get; init; }
     [JsonPropertyName("nutrition_grades_tags")] public string[]? NutritionGradesTags { get; init; }
+    [JsonPropertyName("nutrient_levels")] public Dictionary<string, string>? NutrientLevels { get; init; }
     [JsonPropertyName("nutriments")] public OpenFoodNutriments? Nutriments { get; init; }
 }
 

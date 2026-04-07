@@ -11,7 +11,7 @@ public class OpenFoodSearchClient(HttpClient client) : Client<OpenFoodSearchResp
     protected override IEnumerable<string> Requests(string url)
     {
         var query = base.Request(url);
-        var fields = "product_name,brands,nutriscore_grade,nutrition_grades,nutrition_grade_fr,nutrition_grades_tags,nutriments";
+        var fields = "product_name,brands,nutriscore_grade,nutrition_grades,nutrition_grade_fr,nutrition_grades_tags,nutrient_levels,nutriments";
 
         yield return $"{PrimaryUrl}?search_terms={query}&page_size=25&fields={fields}";
         yield return $"{FallbackUrl}?search_terms={query}&page_size=25&fields={fields}";

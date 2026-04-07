@@ -24,6 +24,7 @@ public class ConsensusBarcodeService(
     IClient<BarcodeResponse> barcodeClient,
     IClient<FreshFoodResponse> usdaClient,
     IClient<OpenFoodSearchResponse> openFoodSearchClient,
+    IClient<OpenFoodSearchALiciousResponse> openFoodSearchALiciousClient,
     IGtinSearchClient gtinSearchClient,
     IConfiguration configuration,
     IMemoryCache cache,
@@ -47,6 +48,7 @@ public class ConsensusBarcodeService(
     private const double GtinBarcodeReliability = 0.7;
     private const double GtinSearchReliability = 0.65;
     private const double MinIdentitySimilarity = 0.52;
+    private const double MinMetadataSimilarity = 0.6;
 
     private readonly SourceSettings _openFoodBarcodeSource = SourceSettingsResolver.Build(
         configuration,
@@ -238,7 +240,7 @@ public class ConsensusBarcodeService(
 
         var gramsValue = grams is null or <= 0 ? 100.0 : grams.Value;
         var dto = ToDto(cacheEntry!.Consensus, gramsValue);
-        await ResolveMissingGradeFromOpenFoodAsync(dto);
+        await ResolveOpenFoodMetadataAsync(dto, barcode);
 
         logger.LogInformation(
             "Barcode consensus completed. input='{Input}', barcode='{Barcode}', identity_query='{IdentityQuery}', cache_hit={CacheHit}, stale_served={StaleServed}, barcode_latency_ms={BarcodeLatency}, gtin_barcode_latency_ms={GtinBarcodeLatency}, usda_latency_ms={UsdaLatency}, openfood_latency_ms={OpenFoodLatency}, gtin_search_latency_ms={GtinSearchLatency}, active_sources={ActiveSources}, confidence={Confidence}",
@@ -905,21 +907,68 @@ public class ConsensusBarcodeService(
         return dto;
     }
 
-    private async Task ResolveMissingGradeFromOpenFoodAsync(FoodDto food)
+    private async Task ResolveOpenFoodMetadataAsync(FoodDto food, string barcode)
     {
-        if (NutritionGrade.Normalize(food.Grade) is not null)
+        var needsGrade = NutritionGrade.Normalize(food.Grade) is null;
+        var needsNutrientLevels = food.NutrientLevels is null || food.NutrientLevels.Count == 0;
+
+        if (!needsGrade && !needsNutrientLevels)
         {
             return;
         }
 
-        var grade = await FetchBestOpenFoodGradeAsync(food);
-        if (grade is not null)
+        try
         {
-            food.Grade = grade;
+            var barcodeResponse = await barcodeClient.Fetch(barcode);
+            var product = barcodeResponse?.Product;
+            if (product is not null)
+            {
+                if (needsGrade)
+                {
+                    food.Grade = product.ResolvedNutritionGrade;
+                    needsGrade = NutritionGrade.Normalize(food.Grade) is null;
+                }
+
+                if (needsNutrientLevels)
+                {
+                    food.NutrientLevels = product.ResolvedNutrientLevels;
+                    needsNutrientLevels = food.NutrientLevels is null || food.NutrientLevels.Count == 0;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "OpenFoodFacts barcode metadata lookup failed. barcode='{Barcode}', food='{Food}'",
+                barcode,
+                food.Name
+            );
+        }
+
+        if (!needsGrade && !needsNutrientLevels)
+        {
+            return;
+        }
+
+        var metadata = await FetchBestOpenFoodMetadataAsync(food);
+        if (metadata is null)
+        {
+            return;
+        }
+
+        if (needsGrade)
+        {
+            food.Grade = metadata.Grade;
+        }
+
+        if (needsNutrientLevels)
+        {
+            food.NutrientLevels = CloneNutrientLevels(metadata.NutrientLevels);
         }
     }
 
-    private async Task<string?> FetchBestOpenFoodGradeAsync(FoodDto food)
+    private async Task<OpenFoodMetadata?> FetchBestOpenFoodMetadataAsync(FoodDto food)
     {
         var queries = new[]
         {
@@ -933,18 +982,18 @@ public class ConsensusBarcodeService(
         {
             try
             {
-                var response = await openFoodSearchClient.Fetch(query);
-                var grade = SelectBestGrade(food, response?.Products ?? []);
-                if (grade is not null)
+                var response = await openFoodSearchALiciousClient.Fetch(query);
+                var metadata = SelectBestMetadata(food, response?.Hits ?? []);
+                if (metadata is not null)
                 {
-                    return grade;
+                    return metadata;
                 }
             }
             catch (Exception ex)
             {
                 logger.LogWarning(
                     ex,
-                    "OpenFoodFacts grade lookup failed. food='{Food}', query='{Query}'",
+                    "OpenFoodFacts metadata lookup failed. food='{Food}', query='{Query}'",
                     food.Name,
                     query
                 );
@@ -954,35 +1003,57 @@ public class ConsensusBarcodeService(
         return null;
     }
 
-    private static string? SelectBestGrade(FoodDto target, IEnumerable<OpenFoodSearchProduct> products)
+    private static OpenFoodMetadata? SelectBestMetadata(FoodDto target, IEnumerable<OpenFoodSearchALiciousHit> products)
     {
         var normalizedName = Normalize(target.Name);
         var normalizedBrand = Normalize(target.Brands);
 
-        var best = products
-            .Select(product => new
+        var ranked = products
+            .Select(product =>
             {
-                Grade = NutritionGrade.Normalize(
-                    product.NutriScoreGrade,
-                    product.NutritionGrades,
-                    product.NutritionGradeFr,
-                    product.NutritionGradesTags?.FirstOrDefault()
-                ),
-                Name = Normalize(product.Name ?? string.Empty),
-                Brand = Normalize(product.Brands ?? string.Empty)
+                var metadata = new OpenFoodMetadata(
+                    NutritionGrade.Normalize(
+                        product.NutriScoreGrade,
+                        product.NutritionGrades,
+                        product.NutritionGradeFr,
+                        product.NutritionGradesTags?.FirstOrDefault()
+                    ),
+                    CloneNutrientLevels(product.NutrientLevels)
+                );
+
+                return new
+                {
+                    Metadata = metadata,
+                    Name = Normalize(product.ResolvedName),
+                    Brand = Normalize(product.ResolvedBrands)
+                };
             })
-            .Where(item => item.Grade is not null && !string.IsNullOrWhiteSpace(item.Name))
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(item.Name) &&
+                (item.Metadata.Grade is not null ||
+                 (item.Metadata.NutrientLevels is not null && item.Metadata.NutrientLevels.Count > 0)))
             .Select(item => new
             {
-                item.Grade,
+                item.Metadata,
                 Score = 0.85 * TokenSimilarity(normalizedName, item.Name) +
                         0.15 * TokenSimilarity(normalizedBrand, item.Brand)
             })
-            .OrderByDescending(item => item.Score)
-            .ThenBy(item => item.Grade, StringComparer.Ordinal)
-            .FirstOrDefault();
+            .OrderByDescending(item => item.Score);
 
-        return best?.Grade;
+        var best = ranked.FirstOrDefault(item => item.Score >= MinMetadataSimilarity);
+        if (best is not null)
+        {
+            return best.Metadata;
+        }
+
+        return ranked.FirstOrDefault()?.Metadata;
+    }
+
+    private static Dictionary<string, string>? CloneNutrientLevels(Dictionary<string, string>? levels)
+    {
+        return levels is null || levels.Count == 0
+            ? null
+            : levels.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
     }
 
     private static bool IsValidBarcode(string barcode)
@@ -1347,6 +1418,11 @@ public class ConsensusBarcodeService(
         double IdentitySimilarity,
         bool HasNutrition,
         string? Grade
+    );
+
+    private sealed record OpenFoodMetadata(
+        string? Grade,
+        Dictionary<string, string>? NutrientLevels
     );
 
     private sealed record AggregateResult(double Value, double NormalizedMad);
