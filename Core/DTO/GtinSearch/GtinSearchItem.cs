@@ -10,5 +10,5 @@ public class GtinSearchItem
     [JsonPropertyName("brand")] public string? Brand { get; init; }
     [JsonPropertyName("brand_name")] public string? BrandName { get; init; }
 
-    [JsonExtensionData] public Dictionary<string, JsonElement> Extra { get; init; } = new();
+    [JsonExtensionData] public Dictionary<string, JsonElement> Extra { get; init; } = [];
 }

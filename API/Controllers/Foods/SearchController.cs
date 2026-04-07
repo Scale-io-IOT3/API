@@ -6,7 +6,7 @@ using Scale.io_API.Controllers.Foods.Abstract;
 namespace Scale.io_API.Controllers.Foods;
 
 [Authorize]
-public class FreshFoodsController(IFreshFoodsService service, ILogger<FreshFoodsController> logger)
+public class SearchController(IFreshFoodsService service, ILogger<SearchController> logger)
     : FoodsController<IFreshFoodsService>(service, logger)
 {
     [HttpGet("{food}")]

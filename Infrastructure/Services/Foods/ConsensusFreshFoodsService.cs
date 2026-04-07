@@ -125,6 +125,7 @@ public class ConsensusFreshFoodsService(
         var foods = cacheEntry!.Foods
             .Select(c => ToDto(c, gramsValue))
             .ToArray();
+        await ResolveMissingGradesFromOpenFoodAsync(foods);
 
         logger.LogInformation(
             "Consensus search completed. query='{Query}', normalized='{Normalized}', cache_hit={CacheHit}, stale_served={StaleServed}, usda_latency_ms={UsdaLatency}, openfood_latency_ms={OpenFoodLatency}, gtin_latency_ms={GtinLatency}, active_sources={ActiveSources}, results={ResultCount}",
@@ -347,7 +348,13 @@ public class ConsensusFreshFoodsService(
         {
             HiddenName = product.Name,
             Brands = product.Brands ?? string.Empty,
-            HiddenMacrosDto = MacrosDto.From(carbs, fat, proteins, (int)Math.Round(calories))
+            HiddenMacrosDto = MacrosDto.From(carbs, fat, proteins, (int)Math.Round(calories)),
+            Grade = NutritionGrade.Normalize(
+                product.NutriScoreGrade,
+                product.NutritionGrades,
+                product.NutritionGradeFr,
+                product.NutritionGradesTags?.FirstOrDefault()
+            )
         };
 
         var candidate = FromDto(OpenFoodFacts, dto, normalizedQuery, OpenFoodReliability);
@@ -564,7 +571,8 @@ public class ConsensusFreshFoodsService(
             dto.MacrosDto.Fat,
             dto.MacrosDto.Proteins,
             weight,
-            matchQuality
+            matchQuality,
+            dto.Grade
         );
     }
 
@@ -677,6 +685,7 @@ public class ConsensusFreshFoodsService(
         var sampleBoost = Math.Min(1.0, group.Count / 4.0);
         var confidence = Clamp(agreeRatio * (1 - variancePenalty) * (0.6 + 0.4 * sampleBoost), 0.05, 0.99);
         var relevance = confidence * 0.6 + best.MatchQuality * 0.4;
+        var grade = SelectConsensusGrade(group);
 
         return new ConsensusFood(
             best.Name,
@@ -687,7 +696,8 @@ public class ConsensusFreshFoodsService(
             proteins.Value,
             confidence,
             group.Select(item => item.Source).Distinct(StringComparer.Ordinal).OrderBy(s => s).ToArray(),
-            relevance
+            relevance,
+            grade
         );
     }
 
@@ -764,12 +774,100 @@ public class ConsensusFreshFoodsService(
                 consensus.Proteins,
                 (int)Math.Round(consensus.Calories)
             ),
+            Grade = consensus.Grade,
             Confidence = Math.Round(consensus.Confidence, 3),
             SourcesUsed = consensus.Sources
         };
 
         dto.Scale(grams);
         return dto;
+    }
+
+    private async Task ResolveMissingGradesFromOpenFoodAsync(FoodDto[] foods)
+    {
+        var missing = foods
+            .Where(food => NutritionGrade.Normalize(food.Grade) is null)
+            .ToArray();
+
+        if (missing.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var food in missing)
+        {
+            var resolved = await FetchBestOpenFoodGradeAsync(food);
+            if (resolved is not null)
+            {
+                food.Grade = resolved;
+            }
+        }
+    }
+
+    private async Task<string?> FetchBestOpenFoodGradeAsync(FoodDto food)
+    {
+        var queries = new[]
+        {
+            $"{food.Brands} {food.Name}".Trim(),
+            food.Name
+        }
+            .Where(query => !string.IsNullOrWhiteSpace(query))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var query in queries)
+        {
+            try
+            {
+                var response = await openFoodClient.Fetch(query);
+                var grade = SelectBestGrade(food, response?.Products ?? []);
+                if (grade is not null)
+                {
+                    return grade;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "OpenFoodFacts grade lookup failed. food='{Food}', query='{Query}'",
+                    food.Name,
+                    query
+                );
+            }
+        }
+
+        return null;
+    }
+
+    private static string? SelectBestGrade(FoodDto target, IEnumerable<OpenFoodSearchProduct> products)
+    {
+        var normalizedName = Normalize(target.Name);
+        var normalizedBrand = Normalize(target.Brands);
+
+        var best = products
+            .Select(product => new
+            {
+                Grade = NutritionGrade.Normalize(
+                    product.NutriScoreGrade,
+                    product.NutritionGrades,
+                    product.NutritionGradeFr,
+                    product.NutritionGradesTags?.FirstOrDefault()
+                ),
+                Name = Normalize(product.Name ?? string.Empty),
+                Brand = Normalize(product.Brands ?? string.Empty)
+            })
+            .Where(item => item.Grade is not null && !string.IsNullOrWhiteSpace(item.Name))
+            .Select(item => new
+            {
+                item.Grade,
+                Score = 0.85 * TokenSimilarity(normalizedName, item.Name) +
+                        0.15 * TokenSimilarity(normalizedBrand, item.Brand)
+            })
+            .OrderByDescending(item => item.Score)
+            .ThenBy(item => item.Grade, StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        return best?.Grade;
     }
 
     /// <summary>
@@ -830,6 +928,36 @@ public class ConsensusFreshFoodsService(
         return Math.Max(min, Math.Min(max, value));
     }
 
+    private static string? SelectConsensusGrade(List<Candidate> group)
+    {
+        var grades = group
+            .Select(candidate => new
+            {
+                Grade = NutritionGrade.Normalize(candidate.Grade),
+                candidate.Weight
+            })
+            .Where(item => item.Grade is not null)
+            .Select(item => new
+            {
+                Grade = item.Grade!,
+                item.Weight
+            })
+            .ToList();
+
+        if (grades.Count == 0)
+        {
+            return null;
+        }
+
+        return grades
+            .GroupBy(item => item.Grade, StringComparer.Ordinal)
+            .OrderByDescending(grouped => grouped.Sum(item => item.Weight))
+            .ThenByDescending(grouped => grouped.Count())
+            .ThenBy(grouped => grouped.Key, StringComparer.Ordinal)
+            .Select(grouped => grouped.Key)
+            .FirstOrDefault();
+    }
+
     private static double ResolveCalories(double calories, double carbs, double fat, double proteins)
     {
         if (calories > 0)
@@ -876,7 +1004,8 @@ public class ConsensusFreshFoodsService(
         double Fat,
         double Proteins,
         double Weight,
-        double MatchQuality
+        double MatchQuality,
+        string? Grade
     );
 
     private sealed record AggregateResult(double Value, double NormalizedMad);
@@ -898,6 +1027,7 @@ public class ConsensusFreshFoodsService(
         double Proteins,
         double Confidence,
         string[] Sources,
-        double Relevance
+        double Relevance,
+        string? Grade
     );
 }

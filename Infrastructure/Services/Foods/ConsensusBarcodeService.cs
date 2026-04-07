@@ -238,6 +238,7 @@ public class ConsensusBarcodeService(
 
         var gramsValue = grams is null or <= 0 ? 100.0 : grams.Value;
         var dto = ToDto(cacheEntry!.Consensus, gramsValue);
+        await ResolveMissingGradeFromOpenFoodAsync(dto);
 
         logger.LogInformation(
             "Barcode consensus completed. input='{Input}', barcode='{Barcode}', identity_query='{IdentityQuery}', cache_hit={CacheHit}, stale_served={StaleServed}, barcode_latency_ms={BarcodeLatency}, gtin_barcode_latency_ms={GtinBarcodeLatency}, usda_latency_ms={UsdaLatency}, openfood_latency_ms={OpenFoodLatency}, gtin_search_latency_ms={GtinSearchLatency}, active_sources={ActiveSources}, confidence={Confidence}",
@@ -453,7 +454,8 @@ public class ConsensusBarcodeService(
             macros.Proteins,
             BarcodeReliability,
             1.0,
-            HasNutrition(macros.Calories, macros.Carbohydrates, macros.Fat, macros.Proteins)
+            HasNutrition(macros.Calories, macros.Carbohydrates, macros.Fat, macros.Proteins),
+            product.ResolvedNutritionGrade
         );
 
         return new BarcodeAnchorResult(raw, sw.ElapsedMilliseconds);
@@ -645,7 +647,13 @@ public class ConsensusBarcodeService(
             proteins,
             OpenFoodSearchReliability,
             0.8,
-            HasNutrition(calories, carbs, fat, proteins)
+            HasNutrition(calories, carbs, fat, proteins),
+            NutritionGrade.Normalize(
+                product.NutriScoreGrade,
+                product.NutritionGrades,
+                product.NutritionGradeFr,
+                product.NutritionGradesTags?.FirstOrDefault()
+            )
         );
     }
 
@@ -678,7 +686,8 @@ public class ConsensusBarcodeService(
             proteins,
             reliability,
             queryQuality,
-            HasNutrition(calories, carbs, fat, proteins)
+            HasNutrition(calories, carbs, fat, proteins),
+            null
         );
     }
 
@@ -695,7 +704,8 @@ public class ConsensusBarcodeService(
             dto.MacrosDto.Proteins,
             reliability,
             MatchQuality(query, Normalize(dto.Name)),
-            HasNutrition(dto.Calories, dto.MacrosDto.Carbohydrates, dto.MacrosDto.Fat, dto.MacrosDto.Proteins)
+            HasNutrition(dto.Calories, dto.MacrosDto.Carbohydrates, dto.MacrosDto.Fat, dto.MacrosDto.Proteins),
+            dto.Grade
         );
     }
 
@@ -718,7 +728,8 @@ public class ConsensusBarcodeService(
             weight,
             raw.QueryQuality,
             1.0,
-            raw.HasNutrition
+            raw.HasNutrition,
+            raw.Grade
         );
     }
 
@@ -743,7 +754,8 @@ public class ConsensusBarcodeService(
             weight,
             raw.QueryQuality,
             identitySimilarity,
-            raw.HasNutrition
+            raw.HasNutrition,
+            raw.Grade
         );
     }
 
@@ -790,6 +802,7 @@ public class ConsensusBarcodeService(
         var variancePenalty = (calories.NormalizedMad + carbs.NormalizedMad + fat.NormalizedMad + proteins.NormalizedMad) / 4.0;
         var identityAgreement = candidates.Average(candidate => candidate.IdentitySimilarity);
         var sampleBoost = Math.Min(1.0, nutritionCandidates.Count / 4.0);
+        var grade = SelectConsensusGrade(candidates);
 
         var confidence = Clamp(agreeRatio * identityAgreement * (1 - variancePenalty) * (0.6 + 0.4 * sampleBoost), 0.05, 0.99);
 
@@ -804,7 +817,8 @@ public class ConsensusBarcodeService(
             [.. candidates
                 .Select(candidate => candidate.Source)
                 .Distinct(StringComparer.Ordinal)
-                .OrderBy(source => source)]
+                .OrderBy(source => source)],
+            grade
         );
     }
 
@@ -882,12 +896,93 @@ public class ConsensusBarcodeService(
                 consensus.Proteins,
                 (int)Math.Round(consensus.Calories)
             ),
+            Grade = consensus.Grade,
             Confidence = Math.Round(consensus.Confidence, 3),
             SourcesUsed = consensus.Sources
         };
 
         dto.Scale(grams);
         return dto;
+    }
+
+    private async Task ResolveMissingGradeFromOpenFoodAsync(FoodDto food)
+    {
+        if (NutritionGrade.Normalize(food.Grade) is not null)
+        {
+            return;
+        }
+
+        var grade = await FetchBestOpenFoodGradeAsync(food);
+        if (grade is not null)
+        {
+            food.Grade = grade;
+        }
+    }
+
+    private async Task<string?> FetchBestOpenFoodGradeAsync(FoodDto food)
+    {
+        var queries = new[]
+        {
+            $"{food.Brands} {food.Name}".Trim(),
+            food.Name
+        }
+            .Where(query => !string.IsNullOrWhiteSpace(query))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var query in queries)
+        {
+            try
+            {
+                var response = await openFoodSearchClient.Fetch(query);
+                var grade = SelectBestGrade(food, response?.Products ?? []);
+                if (grade is not null)
+                {
+                    return grade;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "OpenFoodFacts grade lookup failed. food='{Food}', query='{Query}'",
+                    food.Name,
+                    query
+                );
+            }
+        }
+
+        return null;
+    }
+
+    private static string? SelectBestGrade(FoodDto target, IEnumerable<OpenFoodSearchProduct> products)
+    {
+        var normalizedName = Normalize(target.Name);
+        var normalizedBrand = Normalize(target.Brands);
+
+        var best = products
+            .Select(product => new
+            {
+                Grade = NutritionGrade.Normalize(
+                    product.NutriScoreGrade,
+                    product.NutritionGrades,
+                    product.NutritionGradeFr,
+                    product.NutritionGradesTags?.FirstOrDefault()
+                ),
+                Name = Normalize(product.Name ?? string.Empty),
+                Brand = Normalize(product.Brands ?? string.Empty)
+            })
+            .Where(item => item.Grade is not null && !string.IsNullOrWhiteSpace(item.Name))
+            .Select(item => new
+            {
+                item.Grade,
+                Score = 0.85 * TokenSimilarity(normalizedName, item.Name) +
+                        0.15 * TokenSimilarity(normalizedBrand, item.Brand)
+            })
+            .OrderByDescending(item => item.Score)
+            .ThenBy(item => item.Grade, StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        return best?.Grade;
     }
 
     private static bool IsValidBarcode(string barcode)
@@ -1039,6 +1134,36 @@ public class ConsensusBarcodeService(
     private static double Clamp(double value, double min, double max)
     {
         return Math.Max(min, Math.Min(max, value));
+    }
+
+    private static string? SelectConsensusGrade(List<Candidate> candidates)
+    {
+        var grades = candidates
+            .Select(candidate => new
+            {
+                Grade = NutritionGrade.Normalize(candidate.Grade),
+                candidate.Weight
+            })
+            .Where(item => item.Grade is not null)
+            .Select(item => new
+            {
+                Grade = item.Grade!,
+                item.Weight
+            })
+            .ToList();
+
+        if (grades.Count == 0)
+        {
+            return null;
+        }
+
+        return grades
+            .GroupBy(item => item.Grade, StringComparer.Ordinal)
+            .OrderByDescending(grouped => grouped.Sum(item => item.Weight))
+            .ThenByDescending(grouped => grouped.Count())
+            .ThenBy(grouped => grouped.Key, StringComparer.Ordinal)
+            .Select(grouped => grouped.Key)
+            .FirstOrDefault();
     }
 
     private static string NormalizeBarcode(string value)
@@ -1203,7 +1328,8 @@ public class ConsensusBarcodeService(
         double Proteins,
         double Reliability,
         double QueryQuality,
-        bool HasNutrition
+        bool HasNutrition,
+        string? Grade
     );
 
     private sealed record Candidate(
@@ -1219,7 +1345,8 @@ public class ConsensusBarcodeService(
         double Weight,
         double MatchQuality,
         double IdentitySimilarity,
-        bool HasNutrition
+        bool HasNutrition,
+        string? Grade
     );
 
     private sealed record AggregateResult(double Value, double NormalizedMad);
@@ -1250,6 +1377,7 @@ public class ConsensusBarcodeService(
         double Fat,
         double Proteins,
         double Confidence,
-        string[] Sources
+        string[] Sources,
+        string? Grade
     );
 }
