@@ -4,7 +4,9 @@
 
 Use a .NET 9 SDK and Docker Compose. Run `docker compose up --build` from the repository root. The API is available at `http://localhost:5175`, with docs at `/scalar/v1`. Compose supplies the database connection and Development environment. `API/.env` is now optional (requires Docker Compose supporting optional env files, version 2.24 or later).
 
-During verification on this Mac's OrbStack installation, the native ARM production-image build crashed in the .NET compiler with exit code 132; the x86-64 build succeeded. This is an observed local container limitation, not a diagnosed root cause. If it occurs on your machine, try `DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose up --build` and update the container runtime. CI uses native x86-64 Linux. Host-side .NET builds and tests pass without this workaround.
+During verification on this Mac's OrbStack installation, the native ARM container build crashed in the .NET compiler with exit code 132; the x86-64 build succeeded. Compose therefore defaults the API service to `linux/amd64`, using emulation on ARM Macs. PostgreSQL retains its native platform. This is a workaround for an observed local container limitation, not a diagnosed root cause. After updating the container runtime, you can test native execution with `API_DOCKER_PLATFORM=linux/arm64 docker compose up --build`. CI uses native x86-64 Linux. Host-side .NET builds and tests pass without this workaround.
+
+After changing the API platform, run `docker compose up --build --force-recreate scale.io` to replace the existing API container. Do not remove database volumes; this fix does not require resetting PostgreSQL.
 
 The tracked development settings contain a stable, public, development-only signing key. Production must supply its own `Jwt__Key`; do not copy the development key to production. Environment variables override JSON settings. For direct `dotnet run`, set `ASPNETCORE_ENVIRONMENT=Development` and supply a reachable PostgreSQL connection via `DATABASE_URL`, `SOURCE`, or `ConnectionStrings__DefaultConnection`, in that precedence order. Compose's database is intentionally not exposed to the host.
 

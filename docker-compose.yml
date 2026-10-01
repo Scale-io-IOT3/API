@@ -16,6 +16,7 @@ services:
 
     scale.io:
         container_name: api
+        platform: ${API_DOCKER_PLATFORM:-linux/amd64}
         build:
             context: .
             dockerfile: API/Dockerfile
