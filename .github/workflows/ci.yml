@@ -1,0 +1,40 @@
+name: API checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: scaleio_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d scaleio_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: Host=localhost;Port=5432;Database=scaleio_test;Username=postgres;Password=postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - run: dotnet restore Scale.io_API.sln
+      - run: dotnet build Scale.io_API.sln --configuration Release --no-restore --warnaserror
+      - run: dotnet test Scale.io_API.sln --configuration Release --no-build --logger trx
+      - run: docker build --target final --file API/Dockerfile .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
