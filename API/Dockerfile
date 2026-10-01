@@ -25,13 +25,15 @@ RUN dotnet publish API/API.csproj -c Release -o /app/publish /p:UseAppHost=false
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
-ENTRYPOINT ["dotnet", "API.dll"]
+USER $APP_UID
+CMD ["dotnet", "API.dll"]
 
 # ------------------------------
 # Dev runtime (SDK + watch)
 # ------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dev
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 ENTRYPOINT ["dotnet", "watch", "--non-interactive", "--project", "API/API.csproj", "run", "--urls", "http://0.0.0.0:8080"]

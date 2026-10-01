@@ -32,7 +32,9 @@ services:
             start_interval: 5s
         ports:
             - "5175:8080"
-        env_file: "API/.env"
+        env_file:
+            - path: API/.env
+              required: false
         environment:
             - DATABASE_URL=Host=postgres;Port=5432;Database=scaleio;Username=postgres;Password=postgres
             - ASPNETCORE_ENVIRONMENT=Development

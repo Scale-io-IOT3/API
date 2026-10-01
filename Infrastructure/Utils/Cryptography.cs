@@ -14,6 +14,7 @@ public class Cryptography(IRepo<User> repo)
     public async Task<UserStatus> Authenticate(LoginRequest request)
     {
         var user = await repo.FindByUsername(request.Username);
+        if (user is null) return new UserStatus(false, null);
         var status = Verify(request.Password, user: user);
 
         return new UserStatus(status, user);

@@ -1,4 +1,4 @@
-using Core.Interface;
+using Core.Interface.Login;
 using Core.Models.Entities;
 using Infrastructure.Persistence.Contexts;
 using Infrastructure.Utils;
@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Repositories;
 
-public class TokenRepository(AppDbContext context) : IRepo<Token>
+public class TokenRepository(AppDbContext context) : ITokenRepository
 {
     public async Task<List<Token>> GetAll()
     {
@@ -34,10 +34,9 @@ public class TokenRepository(AppDbContext context) : IRepo<Token>
 
     public async Task CreateOrUpdate(Token token)
     {
-        var t = HashToken(token);
         if (token.Id == 0)
         {
-            await Create(t);
+            await Create(token);
             return;
         }
 
@@ -45,11 +44,11 @@ public class TokenRepository(AppDbContext context) : IRepo<Token>
 
         if (existing is null)
         {
-            await Create(t);
+            await Create(token);
             return;
         }
 
-        Map(t, existing);
+        Map(token, existing);
         await Update(existing);
     }
 
@@ -68,17 +67,17 @@ public class TokenRepository(AppDbContext context) : IRepo<Token>
     }
 
 
-    private static Token HashToken(Token token)
+    public async Task<bool> TryRotate(Token current, Token replacement)
     {
-        return new Token
-        {
-            Id = token.Id,
-            UserId = token.UserId,
-            ExpiresAt = token.ExpiresAt,
-            RevokedAt = token.RevokedAt,
-            TokenHash = Cryptography.Hash(token.TokenHash),
-            TokenFingerprint = Cryptography.FingerprintToken(token.TokenFingerprint)
-        };
+        // Compare-and-swap ensures concurrent refreshes can consume a token only once.
+        var updated = await context.Tokens
+            .Where(t => t.Id == current.Id && t.TokenFingerprint == current.TokenFingerprint &&
+                        t.RevokedAt == null && t.ExpiresAt > DateTime.UtcNow)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(t => t.TokenHash, replacement.TokenHash)
+                .SetProperty(t => t.TokenFingerprint, replacement.TokenFingerprint)
+                .SetProperty(t => t.ExpiresAt, replacement.ExpiresAt));
+        return updated == 1;
     }
 
     private static void Map(Token newToken, Token old)

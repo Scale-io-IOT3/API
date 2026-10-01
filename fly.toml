@@ -13,8 +13,8 @@ primary_region = 'yyz'
 
 [env]
   ASPNETCORE_ENVIRONMENT = 'Production'
-  ApplyMigrationsOnStartup = 'true'
-  SeedDefaultUserOnStartup = 'true'
+  ApplyMigrationsOnStartup = 'false'
+  SeedDefaultUserOnStartup = 'false'
   Jwt__Audience = 'https://scale-io-api.fly.dev'
   Jwt__Issuer = 'https://scale-io-api.fly.dev'
   Jwt__TokenValidityMins = '60'
@@ -37,11 +37,22 @@ primary_region = 'yyz'
   Sources__OpenFoodFactsSearch__TimeoutMs = '1500'
 
 
+[deploy]
+  release_command = 'dotnet API.dll --migrate'
+
 [http_service]
   internal_port = 8080
+  force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
   processes = ['app']
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '30s'
+    method = 'GET'
+    path = '/health'
 
 [[vm]]
   memory = '1gb'

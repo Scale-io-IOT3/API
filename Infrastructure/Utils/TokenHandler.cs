@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using Core.Interface;
 using Core.Interface.Login;
 using Core.Models.API;
 using Core.Models.API.Responses;
@@ -10,7 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Infrastructure.Utils;
 
-public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo, SymmetricSecurityKey signingKey) : ITokenHandler
+public class TokenHandler(IOptions<JwtOptions> options, ITokenRepository repo, SymmetricSecurityKey signingKey) : ITokenHandler
 {
     private readonly JwtOptions _options = options.Value;
     private readonly SymmetricSecurityKey _signingKey = signingKey;
@@ -30,7 +29,7 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo, Symme
     private async Task<TokenResponse> Generate(User user, DateTime expiry)
     {
         var response = GenerateResponse(user, expiry);
-        var token = Token.From(response, user.Id);
+        var token = CreateStoredToken(response.RefreshToken, user.Id);
         token.ExpiresAt = DateTime.UtcNow.AddDays(30);
 
         if (!token.Expired()) await repo.CreateOrUpdate(token);
@@ -70,18 +69,22 @@ public class TokenHandler(IOptions<JwtOptions> options, IRepo<Token> repo, Symme
         return new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256Signature);
     }
 
-    private async Task<TokenResponse> Rotate(Token token)
+    private async Task<TokenResponse?> Rotate(Token token)
     {
         var expiry = DateTime.UtcNow.AddMinutes(_options.TokenValidityMins);
         var response = GenerateResponse(token.User, expiry);
 
-        token.TokenHash = response.RefreshToken;
-        token.TokenFingerprint = response.RefreshToken;
-        token.ExpiresAt = DateTime.UtcNow.AddDays(30);
-        await repo.CreateOrUpdate(token);
-
-        return response;
+        var replacement = CreateStoredToken(response.RefreshToken, token.UserId);
+        return await repo.TryRotate(token, replacement) ? response : null;
     }
+
+    private static Token CreateStoredToken(string plaintext, int userId) => new()
+    {
+        UserId = userId,
+        TokenHash = Cryptography.Hash(plaintext),
+        TokenFingerprint = Cryptography.FingerprintToken(plaintext),
+        ExpiresAt = DateTime.UtcNow.AddDays(30)
+    };
 
     private TokenResponse GenerateResponse(User user, DateTime expiry)
     {

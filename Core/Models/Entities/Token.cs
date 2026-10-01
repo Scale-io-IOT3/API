@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Core.Models.API.Responses;
 
 namespace Core.Models.Entities;
 
@@ -20,13 +19,4 @@ public class Token
         return RevokedAt is not null || ExpiresAt.CompareTo(DateTime.UtcNow) <= 0;
     }
 
-    public static Token From(TokenResponse response, int userId)
-    {
-        return new Token
-        {
-            UserId = userId,
-            TokenHash = response.RefreshToken,
-            TokenFingerprint = response.RefreshToken
-        };
-    }
 }

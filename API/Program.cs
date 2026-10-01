@@ -1,8 +1,13 @@
 using Scale.io_API.Configuration;
 
-var builder = WebApplication.CreateBuilder(args);
+var migrateOnly = args.Contains("--migrate", StringComparer.Ordinal);
+var builder = WebApplication.CreateBuilder(args.Where(arg => arg != "--migrate").ToArray());
 builder.Configure();
 
-var app = builder.Build();
+await using var app = builder.Build();
+await app.InitializeDatabaseAsync(migrateOnly);
+if (migrateOnly) return;
 app.Configure();
-app.Run();
+await app.RunAsync();
+
+public partial class Program;

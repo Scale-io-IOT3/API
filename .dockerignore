@@ -1,4 +1,7 @@
 # flyctl launch added from .gitignore
+**/.env
+**/.env.*
+.git
 # Created by https://www.toptal.com/developers/gitignore/api/csharp,rider,jetbrains,macos
 # Edit at https://www.toptal.com/developers/gitignore?templates=csharp,rider,jetbrains,macos
 

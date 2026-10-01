@@ -1,54 +1,40 @@
-using System.Data;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Asp.Versioning;
 using Core;
-using Core.Models.Entities;
 using DotNetEnv;
 using Infrastructure;
-using Infrastructure.Persistence.Contexts;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption;
-using Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ConfigurationModel;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Scalar.AspNetCore;
-using Infrastructure.Utils;
 
 namespace Scale.io_API.Configuration;
 
 public static class Configuration
 {
-    private const string DefaultUsername = "Monke";
-    private const string DefaultPassword = "1234567890Abc!";
-
     public static void Configure(this WebApplication app)
     {
-        app.UseHttpsRedirection();
+        app.UseExceptionHandler();
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();
-        app.ConfigureStartupExperience();
         app.MapHealthChecks("/health");
-    }
+        app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 
-    private static void MapDocumentation(this WebApplication app)
-    {
-        app.MapOpenApi();
-        app.MapScalarApiReference();
+        if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableApiDocs"))
+        {
+            app.MapOpenApi();
+            app.MapScalarApiReference();
+        }
     }
 
     public static void Configure(this WebApplicationBuilder builder)
     {
-        builder.EnvironmentConfig();
-        builder.ServicesConfig();
-    }
+        if (builder.Environment.IsDevelopment()) Env.Load();
+        builder.Configuration.AddEnvironmentVariables();
+        builder.Services.AddCore();
+        builder.Services.AddInfrastructure(builder.Configuration);
+        builder.Services.AddProblemDetails();
 
-    private static void ServicesConfig(this WebApplicationBuilder webAppBuilder)
-    {
-        webAppBuilder.Services.AddCore();
-        webAppBuilder.Services.AddInfrastructure(webAppBuilder.Configuration);
-
-        webAppBuilder.Services.AddApiVersioning(options =>
+        builder.Services.AddApiVersioning(options =>
         {
             options.AssumeDefaultVersionWhenUnspecified = true;
             options.DefaultApiVersion = new ApiVersion(1);
@@ -59,132 +45,12 @@ public static class Configuration
             options.GroupNameFormat = "'v'V";
             options.SubstituteApiVersionInUrl = false;
         });
-        webAppBuilder.Services.AddControllers().AddJsonOptions(options =>
+
+        builder.Services.AddControllers().AddJsonOptions(options =>
         {
             options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
             options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
-            options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals;
         });
-
-        webAppBuilder.Services.AddDataProtection().UseCryptographicAlgorithms(
-            new AuthenticatedEncryptorConfiguration
-            {
-                EncryptionAlgorithm = EncryptionAlgorithm.AES_256_CBC,
-                ValidationAlgorithm = ValidationAlgorithm.HMACSHA256
-            }
-        );
-
-        webAppBuilder.Services.AddOpenApi();
-    }
-
-    private static void EnvironmentConfig(this WebApplicationBuilder webApplicationBuilder)
-    {
-        if (webApplicationBuilder.Environment.IsDevelopment()) Env.Load();
-        webApplicationBuilder.Configuration.AddEnvironmentVariables();
-    }
-
-    private static void ConfigureStartupExperience(this WebApplication app)
-    {
-        var migrationsApplied = false;
-        if (ShouldApplyMigrations(app))
-        {
-            ApplyMigrations(app);
-            migrationsApplied = true;
-        }
-
-        if (ShouldMapDocumentation(app)) app.MapDocumentation();
-
-        if (ShouldSeedDefaultUser(app, migrationsApplied))
-        {
-            SeedDefaultUser(app);
-        }
-    }
-
-    private static bool ShouldApplyMigrations(WebApplication app)
-    {
-        var configured = app.Configuration.GetValue<bool?>("ApplyMigrationsOnStartup");
-        return configured ?? true;
-    }
-
-    private static bool ShouldSeedDefaultUser(WebApplication app, bool migrationsApplied)
-    {
-        var enabled = app.Configuration.GetValue<bool?>("SeedDefaultUserOnStartup") ?? true;
-        if (!enabled)
-        {
-            return false;
-        }
-
-        if (migrationsApplied)
-        {
-            return true;
-        }
-
-        return HasUsersTable(app);
-    }
-
-    private static void ApplyMigrations(WebApplication app)
-    {
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        db.Database.Migrate();
-    }
-
-    private static bool ShouldMapDocumentation(WebApplication app)
-    {
-        return app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableApiDocs");
-    }
-
-    private static bool HasUsersTable(WebApplication app)
-    {
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-        try
-        {
-            using var connection = db.Database.GetDbConnection();
-            if (connection.State != ConnectionState.Open)
-            {
-                connection.Open();
-            }
-
-            using var command = connection.CreateCommand();
-            command.CommandText = "select to_regclass('public.\"Users\"')::text;";
-
-            var result = command.ExecuteScalar()?.ToString();
-            return !string.IsNullOrWhiteSpace(result);
-        }
-        catch (Exception ex)
-        {
-            app.Logger.LogWarning(ex, "Unable to verify Users table before default-user seeding.");
-            return false;
-        }
-    }
-
-    private static void SeedDefaultUser(WebApplication app)
-    {
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-        var user = db.Users.SingleOrDefault(u => u.Username == DefaultUsername);
-        var created = false;
-        if (user is null)
-        {
-            user = new User
-            {
-                Username = DefaultUsername,
-                PasswordHash = ""
-            };
-            db.Users.Add(user);
-            created = true;
-        }
-
-        user.PasswordHash = Cryptography.Hash(DefaultPassword, user);
-        db.SaveChanges();
-
-        app.Logger.LogInformation(
-            "Default user {Username} {Action}.",
-            DefaultUsername,
-            created ? "created" : "updated"
-        );
+        builder.Services.AddOpenApi();
     }
 }
