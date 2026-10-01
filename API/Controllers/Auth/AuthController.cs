@@ -14,13 +14,13 @@ public class AuthController(IAuthService service) : ControllerBase
     public async Task<ActionResult> Authenticate(LoginRequest request)
     {
         var res = await service.Authenticate(request);
-        return res == null ? Unauthorized() : Ok(res);
+        return res == null ? Problem(statusCode: 401, title: "Invalid credentials.") : Ok(res);
     }
 
     [HttpPost("refresh")]
     public async Task<ActionResult> Refresh([FromBody] RefreshRequest request)
     {
         var res = await service.Refresh(request);
-        return res == null ? Unauthorized("The given token is not valid.") : Ok(res);
+        return res == null ? Problem(statusCode: 401, title: "Invalid or expired refresh token.") : Ok(res);
     }
 }

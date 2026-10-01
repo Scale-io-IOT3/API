@@ -11,8 +11,14 @@ public abstract class FoodsController<T>(T service, ILogger<FoodsController<T>> 
 {
     protected virtual bool EmptyAsNotFound => false;
 
-    protected async Task<ActionResult> Read(string query, double? grams)
+    protected async Task<ActionResult> ReadFood(string query, double? grams)
     {
+        if (grams.HasValue && (!double.IsFinite(grams.Value) || grams.Value <= 0))
+        {
+            ModelState.AddModelError("grams", "Grams must be a finite number greater than zero.");
+            return ValidationProblem(ModelState);
+        }
+
         LogRequestStart(query, grams);
 
         var response = await service.FetchAsync(query, grams);

@@ -10,8 +10,8 @@ public class SearchController(IFreshFoodsService service, ILogger<SearchControll
     : FoodsController<IFreshFoodsService>(service, logger)
 {
     [HttpGet("{food}")]
-    public Task<ActionResult> Read(string food, [FromQuery] double grams)
+    public Task<ActionResult> Read(string food, [FromQuery] double? grams)
     {
-        return base.Read(food, grams);
+        return ReadFood(food, grams);
     }
 }

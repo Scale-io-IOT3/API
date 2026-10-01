@@ -1,9 +1,13 @@
 using System.ComponentModel.DataAnnotations;
-using Core.DTO.Foods;
 
 namespace Core.Models.API.Requests;
 
-public class MealCreationRequest
+public class MealCreationRequest : IValidatableObject
 {
-    [Required] public required FoodDto[] Foods { get; init; }
+    [Required, MinLength(1), MaxLength(100)] public required MealFoodRequest[] Foods { get; init; }
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (Foods is not null && Foods.Any(food => food is null))
+            yield return new ValidationResult("Foods cannot contain null entries.", [nameof(Foods)]);
+    }
 }

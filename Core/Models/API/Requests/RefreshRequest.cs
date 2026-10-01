@@ -6,5 +6,6 @@ public class RefreshRequest
 {
     [Required]
     [MinLength(32)]
+    [MaxLength(256)]
     public string Token { get; set; } = "";
 }
