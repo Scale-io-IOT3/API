@@ -20,6 +20,12 @@ DevelopmentUser__Password=replace-with-your-local-password
 
 Seeding runs only in Development, creates an account only if absent, and never resets an existing password. If migrations are disabled, the schema must already exist before seeding. Startup no longer probes PostgreSQL's system catalog or rewrites passwords. The previous local simplification in Configuration.cs is superseded by this explicit initialization flow.
 
+## Editor navigation and dependency resolution
+
+Open `Scale.io_API.sln` in Rider, or open the repository root in your C#-enabled editor. Docker Compose isolates each project's `bin` and `obj` directories in container volumes so Linux NuGet paths cannot overwrite the Mac/host files used for code navigation and namespace resolution.
+
+After upgrading from the previous Compose configuration, run `docker compose up -d --no-deps --force-recreate scale.io`, then `dotnet restore Scale.io_API.sln --force` on the host. Reload the solution or restart the editor's C# language service after the restore. The database does not need to be reset. If navigation still fails, check the editor's project-loading errors and confirm its C# language support is enabled.
+
 ## Production and migrations
 
 Set `Jwt__Issuer`, `Jwt__Audience`, `Jwt__TokenValidityMins` (positive), and `Jwt__Key` (base64 encoding of at least 32 random bytes). Missing or invalid JWT options fail startup rather than generating an ephemeral key. Store the key and connection string as hosting secrets. Do not print them in logs.

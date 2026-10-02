@@ -24,6 +24,15 @@ services:
         volumes:
             - ./:/app
             - nuget_cache:/root/.nuget/packages
+            # Keep Linux build assets out of the host editor's project directories.
+            - /app/API/bin
+            - /app/API/obj
+            - /app/Core/bin
+            - /app/Core/obj
+            - /app/Infrastructure/bin
+            - /app/Infrastructure/obj
+            - /app/Tests/bin
+            - /app/Tests/obj
         healthcheck:
             test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
             interval: 1m30s
