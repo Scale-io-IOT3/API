@@ -1,40 +1,22 @@
 using Core.Interface;
-using Core.Interface.Foods;
 using Core.Interface.Login;
-using Core.Interface.Meals;
 using Core.Models.Entities;
 using Infrastructure.Persistence.Contexts;
 using Infrastructure.Repositories;
-using Infrastructure.Services.Foods;
-using Infrastructure.Services.Login;
-using Infrastructure.Services.Meals;
-using Infrastructure.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using TokenHandler = Infrastructure.Utils.TokenHandler;
 
 namespace Infrastructure;
 
 public static partial class DependencyInjection
 {
-    private static void AddPersistence(this IServiceCollection services, IConfiguration configuration)
+    private static void AddPersistence(this IServiceCollection services)
     {
         services.AddDbContext<AppDbContext>((provider, options) => options.UseNpgsql(
             ResolveConnectionString(provider.GetRequiredService<IConfiguration>())));
         services.AddRepositories();
-        services.AddServices();
-    }
-
-    private static void AddServices(this IServiceCollection services)
-    {
-        services.AddSingleton<IAuth, Authenticator>();
-        services.AddScoped<ITokenHandler, TokenHandler>();
-        services.AddScoped<IAuthService, AuthService>();
-        services.AddSingleton<IBarcodeService, ConsensusBarcodeService>();
-        services.AddSingleton<IFreshFoodsService, ConsensusFreshFoodsService>();
-        services.AddScoped<IMealsService, MealServie>();
     }
 
     private static void AddRepositories(this IServiceCollection services)

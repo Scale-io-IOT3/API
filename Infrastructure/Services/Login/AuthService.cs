@@ -7,7 +7,7 @@ using Infrastructure.Utils;
 
 namespace Infrastructure.Services.Login;
 
-public class AuthService(ITokenHandler tokenHandler, IRepo<User> repo) : IAuthService
+public sealed class AuthService(ITokenHandler tokenHandler, IRepo<User> repo) : IAuthService
 {
     private readonly Cryptography _cryptography = new(repo);
 
@@ -16,17 +16,11 @@ public class AuthService(ITokenHandler tokenHandler, IRepo<User> repo) : IAuthSe
         var status = await _cryptography.Authenticate(request);
         if (!status.Valid()) return null;
 
-        var token = await tokenHandler.Create(status.User!);
-
-        return new TokenResponse
-        {
-            AccessToken = token.AccessToken,
-            RefreshToken = token.RefreshToken
-        };
+        return await tokenHandler.Create(status.User!);
     }
 
-    public async Task<TokenResponse?> Refresh(RefreshRequest request)
+    public Task<TokenResponse?> Refresh(RefreshRequest request)
     {
-        return await tokenHandler.Refresh(request.Token);
+        return tokenHandler.Refresh(request.Token);
     }
 }

@@ -8,7 +8,7 @@ using Infrastructure.Repositories;
 
 namespace Infrastructure.Services.Meals;
 
-public class MealServie(IRepo<User> users, MealRepository meals) : IMealsService
+public sealed class MealService(IRepo<User> users, MealRepository meals) : IMealsService
 {
     public async Task<MealCreationResponse?> RegisterAsync(MealCreationRequest request, string username)
     {
