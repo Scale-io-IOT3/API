@@ -56,7 +56,7 @@ HTTP tests use isolated SQLite databases and deterministic food fixtures. The Po
 ## Remaining work
 
 - Move to .NET 10 LTS before .NET 9 support ends on November 10, 2026; update SDK, target frameworks, Microsoft/EF packages, Npgsql provider, Docker images, and CI together. Current policy: https://dotnet.microsoft.com/en-us/platform/support/policy . This change retains the installed .NET 9 toolchain.
-- Add tests for consensus source outages, stale-cache behavior, and source ranking before splitting the large consensus services.
+- Extend the consensus fixtures with recorded upstream payloads and source-ranking edge cases before tuning algorithms or adding providers. See `service-architecture.md` for the new responsibility boundaries and existing regression coverage.
 - Implement account provisioning, logout/revocation, and authentication rate limits with a defined mobile workflow. There is still no registration endpoint.
 - Consider shared caching only when running enough instances to justify it; current memory caches and circuit breakers are per process.
 - Add pagination and stable meal identifiers when the mobile UI needs them; the response remains unchanged in this release.

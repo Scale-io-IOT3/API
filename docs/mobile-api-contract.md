@@ -1,5 +1,7 @@
 # Mobile API contract migration
 
+The October 2026 supervisor/validator refactor changes internal service organization only. It requires no additional mobile changes; the contract below remains in effect.
+
 ## Compatibility
 
 Routes, authorization headers, API version 1, snake_case response names, and successful response envelopes are unchanged. No database schema migration is introduced by this change. Existing correctly hashed refresh tokens remain usable until they expire or rotate. This is a compatible extension of the meal input contract with stricter rejection of invalid input.
