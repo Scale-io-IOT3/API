@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 
 namespace Infrastructure.Services.Foods;
 
+/// <summary>Tracks process-wide provider failures and temporarily blocks sources after their configured threshold.</summary>
 internal static class SourceAvailabilityGate
 {
     private sealed record SourceState(int ConsecutiveFailures, DateTimeOffset BlockedUntilUtc);

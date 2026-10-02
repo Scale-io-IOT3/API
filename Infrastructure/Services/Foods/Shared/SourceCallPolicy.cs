@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Services.Foods.Shared;
 
+/// <summary>Pairs a provider's availability settings with its call timeout in milliseconds.</summary>
 internal sealed record SourceCallPolicy(SourceSettings Settings, int TimeoutMs)
 {
     internal static SourceCallPolicy From(

@@ -5,6 +5,7 @@ using static Infrastructure.Services.Foods.Metadata.FoodMetadataMatcher;
 
 namespace Infrastructure.Services.Foods.Metadata;
 
+/// <summary>Fills missing response metadata without replacing existing values or sharing mutable dictionaries.</summary>
 internal sealed class FoodMetadataEnricher(
     FoodMetadataCache metadataCache,
     FoodMetadataProvider provider,
@@ -17,6 +18,10 @@ internal sealed class FoodMetadataEnricher(
         8
     );
 
+    /// <summary>Fills missing grade and nutrient levels on the supplied response DTO.</summary>
+    /// <param name="food">The request-specific DTO to mutate; existing metadata is preserved.</param>
+    /// <param name="barcode">The validated barcode used for metadata lookup and caching.</param>
+    /// <returns>A task completing when enrichment finishes.</returns>
     internal async Task EnrichBarcodeAsync(FoodDto food, string barcode)
     {
         var needsGrade = NutritionGrade.Normalize(food.Grade) is null;
@@ -45,6 +50,10 @@ internal sealed class FoodMetadataEnricher(
         }
     }
 
+    /// <summary>Enriches missing metadata, grouping duplicate identities and bounding lookup concurrency.</summary>
+    /// <param name="foods">Request-specific DTOs to mutate; each receives its own metadata dictionary.</param>
+    /// <returns>A task completing when all enrichment work finishes.</returns>
+    /// <remarks>The configured parallelism limit applies to this invocation, not across the entire process.</remarks>
     internal async Task EnrichSearchAsync(FoodDto[] foods)
     {
         var missing = foods

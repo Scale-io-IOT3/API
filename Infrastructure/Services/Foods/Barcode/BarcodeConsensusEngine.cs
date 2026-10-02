@@ -7,6 +7,7 @@ using static Infrastructure.Validators.Foods.BarcodeCandidateValidator;
 
 namespace Infrastructure.Services.Foods.Barcode;
 
+/// <summary>Aligns candidates to a barcode identity and reconciles nutrition, confidence, and grade without I/O.</summary>
 internal static class BarcodeConsensusEngine
 {
     internal static ConsensusResult Reconcile(

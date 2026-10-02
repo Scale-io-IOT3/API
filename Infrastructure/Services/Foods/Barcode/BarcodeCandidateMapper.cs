@@ -9,6 +9,7 @@ using static Infrastructure.Services.Foods.Shared.NutrientConsensus;
 
 namespace Infrastructure.Services.Foods.Barcode;
 
+/// <summary>Converts provider payloads into barcode identity and nutrition candidates without performing I/O.</summary>
 internal static class BarcodeCandidateMapper
 {
     internal static RawCandidate? ToRawFromOpenFoodSearch(OpenFoodSearchProduct product)

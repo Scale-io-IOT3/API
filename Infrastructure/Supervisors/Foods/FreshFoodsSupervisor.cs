@@ -14,6 +14,8 @@ using static Infrastructure.Services.Foods.Search.SearchResponseMapper;
 
 namespace Infrastructure.Supervisors.Foods;
 
+/// <summary>Coordinates text search, provider consensus, caching, serving scaling, and metadata enrichment.</summary>
+/// <remarks>Cached nutrition is per 100 grams. Stale entries are served while a shared refresh runs in the background; response DTOs are created per request.</remarks>
 internal sealed class FreshFoodsSupervisor(
     SearchSourceProvider sources,
     FoodMetadataEnricher metadata,
@@ -29,6 +31,7 @@ internal sealed class FreshFoodsSupervisor(
         static entry => entry.RefreshedAtUtc
     );
 
+    /// <inheritdoc />
     public async Task<FoodResponse?> ResolveAsync(string normalizedQuery, double? grams = null)
     {
         var key = $"fresh_consensus_{normalizedQuery}";

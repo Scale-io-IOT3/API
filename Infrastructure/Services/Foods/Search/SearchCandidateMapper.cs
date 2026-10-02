@@ -11,6 +11,7 @@ using static Infrastructure.Validators.Foods.SearchCandidateValidator;
 
 namespace Infrastructure.Services.Foods.Search;
 
+/// <summary>Converts provider payloads into normalized, eligible text-search candidates without performing I/O.</summary>
 internal static class SearchCandidateMapper
 {
     internal static Candidate? FromOpenFood(OpenFoodSearchProduct product, string normalizedQuery)

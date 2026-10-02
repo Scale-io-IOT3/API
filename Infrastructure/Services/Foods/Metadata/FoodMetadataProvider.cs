@@ -7,6 +7,7 @@ using static Infrastructure.Services.Foods.Metadata.FoodMetadataMatcher;
 
 namespace Infrastructure.Services.Foods.Metadata;
 
+/// <summary>Looks up OpenFoodFacts metadata, falling back from barcode lookup to text search when necessary.</summary>
 internal sealed class FoodMetadataProvider(
     IClient<BarcodeResponse> barcodeClient,
     IClient<OpenFoodSearchALiciousResponse> openFoodSearchALiciousClient,

@@ -3,6 +3,7 @@ using System.Text;
 
 namespace Infrastructure.Services.Foods.Shared;
 
+/// <summary>Provides shared text normalization and token-based matching for food names and brands.</summary>
 internal static class FoodText
 {
     internal static string Normalize(string value)

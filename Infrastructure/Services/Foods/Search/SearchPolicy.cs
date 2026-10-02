@@ -2,6 +2,7 @@
 
 namespace Infrastructure.Services.Foods.Search;
 
+/// <summary>Defines search source identifiers, reliability weights, fallback thresholds, and result limits.</summary>
 internal static class SearchPolicy
 {
     internal const string Usda = "USDA";

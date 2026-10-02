@@ -3,6 +3,7 @@ using Polly.CircuitBreaker;
 
 namespace Infrastructure.Services.Foods;
 
+/// <summary>Runs provider calls within time budgets and translates failures into caller-supplied fallback results.</summary>
 internal static class SourceCallExecutor
 {
     public static async Task<T> ExecuteWithBudget<T>(

@@ -2,12 +2,18 @@
 
 namespace Infrastructure.Validators.Foods;
 
+/// <summary>Normalizes barcode input and applies the lookup boundary's length and check-digit rules.</summary>
 internal static class BarcodeInputValidator
 {
     private const int MinBarcodeLength = 8;
 
     private const int MaxBarcodeLength = 14;
 
+    /// <summary>Extracts digits and validates an 8-to-14-digit code using its modulo-10 check digit.</summary>
+    /// <param name="input">The raw barcode input; whitespace or empty input is rejected.</param>
+    /// <param name="barcode">The extracted digits, including when validation fails.</param>
+    /// <returns>True when the extracted code passes both rules.</returns>
+    /// <remarks>The length rule accepts the entire range, not only standard GTIN lengths.</remarks>
     internal static bool TryNormalize(string input, out string barcode)
     {
         barcode = NormalizeBarcode(input);

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Services.Foods;
 
+/// <summary>Resolves provider settings, timeout overrides, and fallback configuration aliases.</summary>
 internal static class SourceSettingsResolver
 {
     public static SourceSettings Build(

@@ -2,6 +2,7 @@
 
 namespace Infrastructure.Services.Foods.Search;
 
+/// <summary>Defines internal search pipeline snapshots; nutrient values are per 100 grams before response scaling.</summary>
 internal static class SearchModels
 {
     internal sealed record Candidate(

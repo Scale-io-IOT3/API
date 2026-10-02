@@ -2,6 +2,7 @@
 
 namespace Infrastructure.Services.Foods.Barcode;
 
+/// <summary>Defines barcode source identifiers, reliability weights, and candidate matching thresholds.</summary>
 internal static class BarcodePolicy
 {
     internal const string BarcodeSource = "OpenFoodFactsBarcode";

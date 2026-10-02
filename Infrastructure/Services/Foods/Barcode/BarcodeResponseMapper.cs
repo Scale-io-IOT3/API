@@ -3,6 +3,7 @@ using static Infrastructure.Services.Foods.Barcode.BarcodeModels;
 
 namespace Infrastructure.Services.Foods.Barcode;
 
+/// <summary>Creates a fresh barcode response DTO and scales per-100-gram nutrition to the requested serving.</summary>
 internal static class BarcodeResponseMapper
 {
     internal static FoodDto ToDto(ConsensusFood consensus, double grams)

@@ -2,6 +2,7 @@ using System.Globalization;
 
 namespace Infrastructure.Services.Foods.Shared;
 
+/// <summary>Extracts provider fields through known aliases, nested JSON traversal, and invariant numeric parsing.</summary>
 internal static class ExternalFoodFields
 {
     internal static readonly HashSet<string> NameKeys = new(StringComparer.OrdinalIgnoreCase)

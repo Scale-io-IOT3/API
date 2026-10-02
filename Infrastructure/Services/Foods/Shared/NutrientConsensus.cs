@@ -2,8 +2,12 @@
 
 namespace Infrastructure.Services.Foods.Shared;
 
+/// <summary>Aggregates per-100-gram nutrients using median-absolute-deviation outlier rejection and weighted medians.</summary>
 internal static class NutrientConsensus
 {
+    /// <summary>Rejects robust statistical outliers before calculating a weighted nutrient median.</summary>
+    /// <param name="values">Per-100-gram values with their source weights.</param>
+    /// <returns>The aggregate and normalized dispersion; empty input returns zero with maximum dispersion.</returns>
     internal static AggregateResult Aggregate(List<(double Value, double Weight)> values)
     {
         if (values.Count == 0)

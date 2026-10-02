@@ -17,6 +17,7 @@ using static Infrastructure.Services.Foods.Shared.NutrientConsensus;
 
 namespace Infrastructure.Services.Foods.Barcode;
 
+/// <summary>Retrieves barcode anchors and supporting search candidates using source-specific time budgets.</summary>
 internal sealed class BarcodeSourceProvider(
     IClient<BarcodeResponse> barcodeClient,
     IClient<FreshFoodResponse> usdaClient,

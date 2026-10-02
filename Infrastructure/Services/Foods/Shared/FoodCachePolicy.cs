@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure.Services.Foods.Shared;
 
+/// <summary>Defines consensus cache expiration and the configured stale-while-revalidate interval.</summary>
 internal static class FoodCachePolicy
 {
     internal static MemoryCacheEntryOptions CreateOptions() => new()

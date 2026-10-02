@@ -4,10 +4,16 @@ using static Infrastructure.Services.Foods.Shared.FoodText;
 
 namespace Infrastructure.Services.Foods.Metadata;
 
+/// <summary>Ranks OpenFoodFacts metadata matches by normalized food name and brand.</summary>
 internal static class FoodMetadataMatcher
 {
     private const double MinMetadataSimilarity = 0.6;
 
+    /// <summary>Selects usable metadata ranked by name and brand similarity.</summary>
+    /// <param name="target">The response food whose identity should be matched.</param>
+    /// <param name="products">Provider products to rank.</param>
+    /// <returns>The preferred metadata, or null when no product has usable metadata.</returns>
+    /// <remarks>If no ranked result meets the preferred similarity threshold, the best available result is still used.</remarks>
     internal static OpenFoodMetadata? SelectBestMetadata(FoodDto target, IEnumerable<OpenFoodSearchALiciousHit> products)
     {
         var normalizedName = Normalize(target.Name);

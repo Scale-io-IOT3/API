@@ -71,6 +71,12 @@ Successful workflow logs now come from supervisor logger categories; upstream me
 
 The small auth and meal services keep their direct repository/token-handler dependencies. They did not need an extra supervisor forwarding layer. `MealServie` was renamed to `MealService`, the auth response copy was removed, and the unregistered legacy generic cache services were removed after checking their references.
 
+## XML documentation
+
+C# uses XML documentation comments (`///`), the equivalent of JSDoc and JavaDoc. Service and supervisor interfaces document inputs, serving units, preconditions, and empty/null results. Implementations use `<inheritdoc />` to keep those contracts in one place. Internal pipeline types document their responsibility; validators document acceptance rules and the limits of their heuristics.
+
+When extending a contract, add `<summary>`, `<param>`, and `<returns>` where applicable. Use `<remarks>` for constraints or side effects that callers need to know, and `<exception>` only for exceptions deliberately exposed by the method. Keep comments about behavior rather than restating the method name. These comments are available through IDE tooling and do not change the HTTP/mobile contract.
+
 ## Verification
 
 `ConsensusServiceTests` captures serving-size independence, metadata isolation, invalid inputs, shared concurrent refreshes, failures, stale-result preservation, provider fallbacks, and identity alignment. `FoodRulesTests` covers normalization, checksum and candidate rules, and aggregation. `FoodCacheTests` covers concurrent work sharing, negative caching, and recovery after exceptions. Existing HTTP and PostgreSQL regression tests remain in place.

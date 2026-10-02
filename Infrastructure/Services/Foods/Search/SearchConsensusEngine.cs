@@ -6,6 +6,7 @@ using static Infrastructure.Services.Foods.Shared.NutrientConsensus;
 
 namespace Infrastructure.Services.Foods.Search;
 
+/// <summary>Clusters related search candidates and ranks their reconciled nutrition and confidence without I/O.</summary>
 internal static class SearchConsensusEngine
 {
     internal static List<ConsensusFood> BuildConsensus(List<Candidate> candidates, int activeSources)

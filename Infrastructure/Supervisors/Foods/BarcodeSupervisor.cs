@@ -16,6 +16,8 @@ using static Infrastructure.Services.Foods.Shared.FoodText;
 
 namespace Infrastructure.Supervisors.Foods;
 
+/// <summary>Coordinates barcode identity matching, provider consensus, caching, serving scaling, and metadata enrichment.</summary>
+/// <remarks>Cached nutrition is per 100 grams. Stale entries are served while a shared refresh runs in the background; response DTOs are created per request.</remarks>
 internal sealed class BarcodeSupervisor(
     BarcodeSourceProvider sources,
     FoodMetadataEnricher metadata,
@@ -31,6 +33,7 @@ internal sealed class BarcodeSupervisor(
         static entry => entry.RefreshedAtUtc
     );
 
+    /// <inheritdoc />
     public async Task<FoodResponse?> ResolveAsync(string barcode, double? grams = null)
     {
         var key = $"barcode_consensus_{barcode}";

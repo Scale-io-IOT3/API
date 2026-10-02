@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Infrastructure.Services.Foods.Metadata;
 
+/// <summary>Caches positive and negative metadata results and shares concurrent fetches for the same key.</summary>
 internal sealed class FoodMetadataCache(IMemoryCache cache)
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<OpenFoodMetadata?>>> _metadataInFlight = new(StringComparer.Ordinal);
@@ -19,6 +20,11 @@ internal sealed class FoodMetadataCache(IMemoryCache cache)
         AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(20)
     };
 
+    /// <summary>Returns cached metadata or shares one fetch among concurrent callers for this key.</summary>
+    /// <param name="cacheKey">A namespaced metadata identity key.</param>
+    /// <param name="fetch">The lookup executed on a cache miss; null results are cached with a shorter lifetime.</param>
+    /// <returns>The metadata, or null for a cached or newly fetched miss.</returns>
+    /// <remarks>Fetch exceptions propagate. Completed or failed in-flight work is removed so later calls can retry.</remarks>
     internal async Task<OpenFoodMetadata?> GetAsync(string cacheKey, Func<Task<OpenFoodMetadata?>> fetch)
     {
         if (cache.TryGetValue(cacheKey, out OpenFoodMetadataCacheEntry? cached) && cached is not null)

@@ -2,6 +2,7 @@
 
 namespace Infrastructure.Services.Foods.Barcode;
 
+/// <summary>Defines internal barcode pipeline snapshots; nutrient values are per 100 grams before response scaling.</summary>
 internal static class BarcodeModels
 {
     internal sealed record ConsensusResult(ConsensusFood? Food, int ActiveSources);

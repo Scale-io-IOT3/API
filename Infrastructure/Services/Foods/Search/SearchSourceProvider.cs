@@ -16,6 +16,7 @@ using static Infrastructure.Services.Foods.Shared.NutrientConsensus;
 
 namespace Infrastructure.Services.Foods.Search;
 
+/// <summary>Adapts search providers into candidates with source-specific time budgets and latency measurements.</summary>
 internal sealed class SearchSourceProvider(
     IClient<FreshFoodResponse> usdaClient,
     IClient<OpenFoodSearchResponse> openFoodClient,

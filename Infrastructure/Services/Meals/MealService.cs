@@ -8,8 +8,10 @@ using Infrastructure.Repositories;
 
 namespace Infrastructure.Services.Meals;
 
+/// <summary>Maps meal requests and responses while repositories manage persistence.</summary>
 public sealed class MealService(IRepo<User> users, MealRepository meals) : IMealsService
 {
+    /// <inheritdoc />
     public async Task<MealCreationResponse?> RegisterAsync(MealCreationRequest request, string username)
     {
         var user = await GetUser(username);
@@ -25,6 +27,7 @@ public sealed class MealService(IRepo<User> users, MealRepository meals) : IMeal
         return new MealCreationResponse { Meal = meal.ToDto() };
     }
 
+    /// <inheritdoc />
     public async Task<List<MealDto>> GetMeals(string username)
     {
         var user = await GetUser(username);

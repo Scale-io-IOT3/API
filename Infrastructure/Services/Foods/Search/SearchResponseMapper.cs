@@ -3,6 +3,7 @@ using static Infrastructure.Services.Foods.Search.SearchModels;
 
 namespace Infrastructure.Services.Foods.Search;
 
+/// <summary>Creates fresh search response DTOs and scales per-100-gram nutrition to the requested serving.</summary>
 internal static class SearchResponseMapper
 {
     internal static FoodDto ToDto(ConsensusFood consensus, double grams)
