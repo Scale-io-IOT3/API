@@ -6,6 +6,10 @@ on:
         branches: [main]
 permissions:
     contents: read
+    actions: read
+concurrency:
+    group: production-deployment
+    cancel-in-progress: false
 jobs:
     deploy:
         if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository
@@ -21,7 +25,25 @@ jobs:
             - name: Install Flyctl
               uses: superfly/flyctl-actions/setup-flyctl@master
 
+            - name: Download validated image
+              uses: actions/download-artifact@v4
+              with:
+                  name: production-image
+                  path: image-artifact
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  run-id: ${{ github.event.workflow_run.id }}
+
             - name: Deploy
-              run: flyctl deploy --remote-only --yes
+              run: |
+                  docker load --input image-artifact/production.tar.gz
+                  test "$(docker image inspect scaleio-production:check --format '{{.Id}}')" = "$(cat image-artifact/image-id.txt)"
+                  flyctl auth docker
+                  image="registry.fly.io/scale-io-api:ci-${TESTED_SHA}-${TESTED_RUN_ID}"
+                  docker tag scaleio-production:check "$image"
+                  docker push "$image"
+                  digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')
+                  flyctl deploy --image "$digest" --yes
               env:
                   FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+                  TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+                  TESTED_RUN_ID: ${{ github.event.workflow_run.id }}

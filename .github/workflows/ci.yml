@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
         env:
           POSTGRES_DB: scaleio_test
           POSTGRES_USER: postgres
@@ -32,7 +32,22 @@ jobs:
       - run: dotnet restore Scale.io_API.sln
       - run: dotnet build Scale.io_API.sln --configuration Release --no-restore --warnaserror
       - run: dotnet test Scale.io_API.sln --configuration Release --no-build --logger trx
-      - run: docker build --target final --file API/Dockerfile .
+      - run: docker build --file API/Dockerfile --tag scaleio-production:check .
+      - run: docker build --target dev --file API/Dockerfile --tag scaleio-development:check .
+      - run: bash scripts/docker-smoke.sh
+      - name: Export validated production image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p image-artifact
+          docker image inspect scaleio-production:check --format '{{.Id}}' > image-artifact/image-id.txt
+          docker save scaleio-production:check | gzip > image-artifact/production.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: production-image
+          path: image-artifact/
+          retention-days: 7
+          compression-level: 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
