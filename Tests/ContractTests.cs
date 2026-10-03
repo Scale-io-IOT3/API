@@ -14,6 +14,11 @@ namespace Tests;
 
 public sealed class ContractTests : IDisposable
 {
+    // Identity 2.x V3 format: PBKDF2-HMAC-SHA256, 10,000 iterations, 16-byte salt.
+    private const string LegacyCredential = "legacy-credential";
+    private const string LegacyHash = "AQAAAAEAACcQAAAAEAABAgMEBQYHCAkKCwwNDg//cojy89K9OS6JuzJ7QyhSVVSPiN/kIp7FSFtmNAEX8w==";
+    private const string LegacyToken = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+Pw==";
+    private const string LegacyTokenHash = "AQAAAAEAACcQAAAAEAABAgMEBQYHCAkKCwwNDg8EAjLcd+NYhzekKVZLVaRxiooQkwdvZMC702a0Fgqo6w==";
     private readonly ApiFactory _factory = new();
     private readonly HttpClient _client;
 
@@ -30,6 +35,49 @@ public sealed class ContractTests : IDisposable
         var tokens = await response.Content.ReadFromJsonAsync<JsonElement>();
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GetProperty("access_token").GetString());
         return tokens;
+    }
+
+    [Fact]
+    public async Task LegacyPasswordHashRemainsAccepted()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.SingleAsync();
+            user.PasswordHash = LegacyHash;
+            await db.SaveChangesAsync();
+        }
+
+        var rejected = await _client.PostAsJsonAsync("/Auth", new { username = "tester", password = "wrong" });
+        Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
+        var response = await _client.PostAsJsonAsync("/Auth", new { username = "tester", password = LegacyCredential });
+        response.EnsureSuccessStatusCode();
+        var tokens = await response.Content.ReadFromJsonAsync<JsonElement>();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GetProperty("access_token").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/Meals")).StatusCode);
+    }
+
+    [Fact]
+    public async Task LegacyRefreshTokenHashCanRotate()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.SingleAsync();
+            db.Tokens.Add(new Core.Models.Entities.Token
+            {
+                UserId = user.Id, TokenHash = LegacyTokenHash,
+                TokenFingerprint = Cryptography.FingerprintToken(LegacyToken)
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await _client.PostAsJsonAsync("/Auth/refresh", new { token = LegacyToken });
+        response.EnsureSuccessStatusCode();
+        var tokens = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.NotEqual(LegacyToken, tokens.GetProperty("refresh_token").GetString());
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await _client.PostAsJsonAsync("/Auth/refresh", new { token = LegacyToken })).StatusCode);
     }
 
     [Fact]

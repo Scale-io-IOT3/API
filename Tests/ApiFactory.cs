@@ -14,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Tests;
 
-public sealed class ApiFactory : WebApplicationFactory<Program>
+public sealed class ApiFactory(bool enableApiDocs = false) : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     public const string Password = "test-password";
@@ -31,6 +31,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Jwt:TokenValidityMins"] = "60",
             ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Database=unused;Username=test",
             ["ApplyMigrationsOnStartup"] = "false",
+            ["EnableApiDocs"] = enableApiDocs.ToString(),
             ["SeedDefaultUserOnStartup"] = "true"
         }));
         builder.ConfigureServices(services =>

@@ -2,7 +2,7 @@
 
 ## Local development
 
-Use a .NET 9 SDK and Docker Compose. Run `docker compose up --build` from the repository root. The API is available at `http://localhost:5175`, with docs at `/scalar/v1`. Compose supplies the database connection and Development environment. `API/.env` is now optional (requires Docker Compose supporting optional env files, version 2.24 or later).
+Use a .NET 10 SDK and Docker Compose. Run `docker compose up --build` from the repository root. The API is available at `http://localhost:5175`, with docs at `/scalar/v1`. Compose supplies the database connection and Development environment. `API/.env` is now optional (requires Docker Compose supporting optional env files, version 2.24 or later).
 
 During verification on this Mac's OrbStack installation, the native ARM container build crashed in the .NET compiler with exit code 132; the x86-64 build succeeded. Compose therefore defaults the API service to `linux/amd64`, using emulation on ARM Macs. PostgreSQL retains its native platform. This is a workaround for an observed local container limitation, not a diagnosed root cause. After updating the container runtime, you can test native execution with `API_DOCKER_PLATFORM=linux/arm64 docker compose up --build`. CI uses native x86-64 Linux. Host-side .NET builds and tests pass without this workaround.
 
@@ -19,6 +19,16 @@ DevelopmentUser__Password=replace-with-your-local-password
 ```
 
 Seeding runs only in Development, creates an account only if absent, and never resets an existing password. If migrations are disabled, the schema must already exist before seeding. Startup no longer probes PostgreSQL's system catalog or rewrites passwords. The previous local simplification in Configuration.cs is superseded by this explicit initialization flow.
+
+## .NET 10 LTS migration
+
+All projects target `net10.0`. Install the [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) before building on the host; having only the .NET 10 runtime is insufficient. `global.json` requires SDK 10.0.401 or a newer stable .NET 10 feature band and prevents selection of preview SDKs or another major version. CI reads the same file. Microsoft ASP.NET Core, EF Core, and Extensions packages use 10.0.12; the Npgsql EF provider uses 10.0.3. Keep these dependencies compatible when applying future servicing updates. See the [ASP.NET Core migration guide](https://learn.microsoft.com/en-us/aspnet/core/migration/90-to-100?view=aspnetcore-10.0) and [.NET support policy](https://dotnet.microsoft.com/en-us/platform/support/policy).
+
+Production and development Docker stages use .NET 10 images. The unqualified `10.0` tags follow Microsoft's servicing updates and now use Ubuntu; the development stage's curl installation still uses apt. Both runtime stages install `libgssapi-krb5-2` because [Npgsql 10 now probes GSSAPI session encryption](https://www.npgsql.org/doc/release-notes/10.0.html); this avoids missing-library messages without disabling that connection option. Rebuild and recreate the API container with `docker compose up --build --force-recreate scale.io` after upgrading.
+
+The legacy `Microsoft.AspNetCore.Identity` 2.x dependency is replaced by `Microsoft.Extensions.Identity.Core` 10.0. Existing Identity V3 password and refresh-token hashes remain readable; regression tests exercise login and refresh rotation with the old hash format. Newly generated hashes use the current Identity defaults. This upgrade adds no EF schema migration. Existing migrations and their generated snapshots retain their original version metadata. The release command remains `dotnet API.dll --migrate`.
+
+API docs remain at `/scalar/v1`, with their document at `/openapi/v1.json`. The document now uses .NET 10's default OpenAPI 3.1.1 format; Scalar is updated to consume it. HTTP response contracts remain covered by the existing regression tests.
 
 ## Editor navigation and dependency resolution
 
@@ -61,7 +71,6 @@ HTTP tests use isolated SQLite databases and deterministic food fixtures. The Po
 
 ## Remaining work
 
-- Move to .NET 10 LTS before .NET 9 support ends on November 10, 2026; update SDK, target frameworks, Microsoft/EF packages, Npgsql provider, Docker images, and CI together. Current policy: https://dotnet.microsoft.com/en-us/platform/support/policy . This change retains the installed .NET 9 toolchain.
 - Extend the consensus fixtures with recorded upstream payloads and source-ranking edge cases before tuning algorithms or adding providers. See `service-architecture.md` for the new responsibility boundaries and existing regression coverage.
 - Implement account provisioning, logout/revocation, and authentication rate limits with a defined mobile workflow. There is still no registration endpoint.
 - Consider shared caching only when running enough instances to justify it; current memory caches and circuit breakers are per process.

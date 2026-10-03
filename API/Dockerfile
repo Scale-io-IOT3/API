@@ -1,16 +1,19 @@
 ﻿# ------------------------------
 # Base runtime (prod)
 # ------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 WORKDIR /app
 EXPOSE 8080
+# Npgsql 10 probes GSSAPI encryption when opening PostgreSQL connections.
+RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
 
 # ------------------------------
 # Build stage
 # ------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+COPY global.json ./
 COPY API/API.csproj API/
 COPY Core/Core.csproj Core/
 COPY Infrastructure/Infrastructure.csproj Infrastructure/
@@ -31,9 +34,9 @@ CMD ["dotnet", "API.dll"]
 # ------------------------------
 # Dev runtime (SDK + watch)
 # ------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dev
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS dev
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 ENTRYPOINT ["dotnet", "watch", "--non-interactive", "--project", "API/API.csproj", "run", "--urls", "http://0.0.0.0:8080"]
