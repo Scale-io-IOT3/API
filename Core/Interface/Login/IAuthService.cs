@@ -14,4 +14,6 @@ public interface IAuthService : IService<TokenResponse, LoginRequest>
     /// <param name="request">The refresh token to exchange.</param>
     /// <returns>The replacement tokens, or null when the token cannot be refreshed.</returns>
     public Task<TokenResponse?> Refresh(RefreshRequest request);
+
+    public Task<TokenResponse?> Register();
 }

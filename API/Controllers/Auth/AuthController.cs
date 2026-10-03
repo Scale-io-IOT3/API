@@ -10,6 +10,13 @@ namespace Scale.io_API.Controllers.Auth;
 [AllowAnonymous]
 public class AuthController(IAuthService service) : ControllerBase
 {
+    [HttpPost("register")]
+    public async Task<ActionResult> Register()
+    {
+        var res = service.Register();
+        return Ok(res);
+    }
+
     [HttpPost]
     public async Task<ActionResult> Authenticate(LoginRequest request)
     {
