@@ -72,7 +72,7 @@ Production and development Docker stages use .NET 10 images. The .NET and Postgr
 
 The legacy `Microsoft.AspNetCore.Identity` 2.x dependency is replaced by `Microsoft.Extensions.Identity.Core` 10.0. Existing Identity V3 password and refresh-token hashes remain readable; regression tests exercise login and refresh rotation with the old hash format. Newly generated hashes use the current Identity defaults. This upgrade adds no EF schema migration. Existing migrations and their generated snapshots retain their original version metadata. The release command remains `dotnet API.dll --migrate`.
 
-API docs remain at `/scalar/v1`, with their document at `/openapi/v1.json`. The document now uses .NET 10's default OpenAPI 3.1.1 format; Scalar is updated to consume it. HTTP response contracts remain covered by the existing regression tests.
+In Development, Scalar at `/scalar/v1` and OpenAPI at `/openapi/v1.json` are public. Outside Development, `EnableApiDocs=true` exposes only OpenAPI and requires a valid bearer access token; Scalar is unavailable. With `EnableApiDocs=false`, neither documentation endpoint is mapped outside Development. The document uses OpenAPI 3.1.1. Regression tests cover these access rules and the HTTP response contracts.
 
 ## Editor navigation and dependency resolution
 
