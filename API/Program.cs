@@ -1,7 +1,7 @@
 using Scale.io_API.Configuration;
 
 var migrateOnly = args.Contains("--migrate", StringComparer.Ordinal);
-var builder = WebApplication.CreateBuilder(args.Where(arg => arg != "--migrate").ToArray());
+var builder = WebApplication.CreateBuilder([.. args.Where(arg => arg != "--migrate")]);
 builder.Configure();
 
 await using var app = builder.Build();

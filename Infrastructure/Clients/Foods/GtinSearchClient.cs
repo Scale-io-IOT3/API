@@ -43,12 +43,11 @@ public class GtinSearchClient(HttpClient client) : IGtinSearchClient
 
         return document.RootElement.ValueKind switch
         {
-            JsonValueKind.Array => document.RootElement
+            JsonValueKind.Array => [.. document.RootElement
                 .EnumerateArray()
                 .Select(DeserializeItem)
                 .Where(item => item is not null)
-                .Cast<GtinSearchItem>()
-                .ToArray(),
+                .Cast<GtinSearchItem>()],
             JsonValueKind.Object => DeserializeItem(document.RootElement) is { } single ? [single] : [],
             _ => []
         };
