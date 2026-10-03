@@ -19,10 +19,15 @@ public static class Configuration
         app.MapHealthChecks("/health");
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 
-        if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableApiDocs"))
+        if (app.Environment.IsDevelopment())
         {
             app.MapOpenApi();
             app.MapScalarApiReference();
+        }
+        else if (app.Configuration.GetValue<bool>("EnableApiDocs"))
+        {
+            app.MapOpenApi()
+                .RequireAuthorization();
         }
     }
 
