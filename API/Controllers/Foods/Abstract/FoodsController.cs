@@ -35,6 +35,8 @@ public abstract class FoodsController<T>(T service, ILogger<FoodsController<T>> 
 
     private void LogRequestStart(string query, double? grams)
     {
+        grams ??= 100;
+        
         logger.LogInformation("➡️ Requested {Grams}g of '{Query}' at {Controller}",
             grams,
             query,
