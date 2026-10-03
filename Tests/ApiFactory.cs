@@ -14,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Tests;
 
-public sealed class ApiFactory(bool enableApiDocs = false) : WebApplicationFactory<Program>
+public sealed class ApiFactory(bool enableApiDocs = false, string environment = "Testing") : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     public const string Password = "test-password";
@@ -22,7 +22,7 @@ public sealed class ApiFactory(bool enableApiDocs = false) : WebApplicationFacto
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         _connection.Open();
-        builder.UseEnvironment("Testing");
+        builder.UseEnvironment(environment);
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Jwt:Issuer"] = "test-api",
@@ -32,7 +32,7 @@ public sealed class ApiFactory(bool enableApiDocs = false) : WebApplicationFacto
             ["ConnectionStrings:DefaultConnection"] = "Host=localhost;Database=unused;Username=test",
             ["ApplyMigrationsOnStartup"] = "false",
             ["EnableApiDocs"] = enableApiDocs.ToString(),
-            ["SeedDefaultUserOnStartup"] = "true"
+            ["SeedDefaultUserOnStartup"] = "false"
         }));
         builder.ConfigureServices(services =>
         {

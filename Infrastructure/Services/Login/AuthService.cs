@@ -26,4 +26,9 @@ public sealed class AuthService(ITokenHandler tokenHandler, IRepo<User> repo) : 
     {
         return tokenHandler.Refresh(request.Token);
     }
+
+    public Task<TokenResponse?> Register()
+    {
+        throw new NotImplementedException();
+    }
 }
